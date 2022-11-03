@@ -3,67 +3,61 @@ package fpgatidbits.ocm
 //import chisel3._
 import chisel3.util._
 import chisel3._
-import chisel3.util._
 
-class Q_srl(depthElems: Int, widthBits: Int) extends BlackBox(Map( "depth" -> depthElems, "width" -> widthBits))
-{
-    val io = IO(new Bundle {
-      val i_v = Input(Bool())
-      val i_d = Input(UInt(widthBits.W))
-      val i_b = Output(Bool())
-      val o_v = Output(Bool())
-      val o_d = Output(UInt(widthBits.W))
-      val o_b = Input(Bool())
-      val count = Output(UInt(log2Ceil(depthElems+1).W))
-      val clock = Input(Clock())
-      val reset = Input(Reset())
+class Q_srl(depthElems: Int, widthBits: Int)
+// extends BlackBox(Map("depth" -> depthElems, "width" -> widthBits))
+    extends Module {
+  val io = IO(new Bundle {
+    val i_v = Input(Bool())
+    val i_d = Input(UInt(widthBits.W))
+    val i_b = Output(Bool())
+    val o_v = Output(Bool())
+    val o_d = Output(UInt(widthBits.W))
+    val o_b = Input(Bool())
+    val count = Output(UInt(log2Ceil(depthElems + 1).W))
+    val clock = Input(Clock())
+    val reset = Input(Reset())
 
-      /*
-      val iValid = Input(Bool()).suggestName("i_v")
-      val iData = Input(UInt(widthBits.W)).suggestName("i_d")
-      val iBackPressure = Output(Bool()).suggestName("i_b")
-      val oValid = Output(Bool()).suggestName("o_v")
-      val oData = Output(UInt(widthBits.W)).suggestName("o_d")
-      val oBackPressure = Input(Bool()).suggestName("o_b")
-      val count = Output(UInt(log2Ceil(depthElems+1).W)).suggestName("count")
-      val clock = Input(Clock())
-      val reset = Input(Reset())
+    // val iValid = Input(Bool()).suggestName("i_v")
+    // val iData = Input(UInt(widthBits.W)).suggestName("i_d")
+    // val iBackPressure = Output(Bool()).suggestName("i_b")
+    // val oValid = Output(Bool()).suggestName("o_v")
+    // val oData = Output(UInt(widthBits.W)).suggestName("o_d")
+    // val oBackPressure = Input(Bool()).suggestName("o_b")
+    // val count = Output(UInt(log2Ceil(depthElems+1).W)).suggestName("count")
+    // val clock = Input(Clock())
+    // val reset = Input(Reset())
 
-      iValid.suggestName("i_v")
-      iData.suggestName("i_d")
-      iBackPressure.suggestName("i_b")
-      oValid.suggestName("o_v")
-      oData.suggestName("o_d")
-      oBackPressure.suggestName("o_b")
-      count.suggestName("count")
-    */
+    // i_v.suggestName("i_v")
+    // i_d.suggestName("i_d")
+    // i_b.suggestName("i_b")
+    // o_v.suggestName("o_v")
+    // o_d.suggestName("o_d")
+    // o_b.suggestName("o_b")
+    // count.suggestName("count")
 
-    })
-
-
+  })
 
   // the clock/reset does not get added to the BlackBox interface by default
   // add clock and reset, rename as needed
-  //addClock(Driver.implicitClock)
-  //renameClock(Driver.implicitClock, "clock")
-  //addResetPin(Driver.implicitReset)
+  // addClock(Driver.implicitClock)
+  // renameClock(Driver.implicitClock, "clock")
+  // addResetPin(Driver.implicitReset)
 
   // TODO add a proper simulation model -- for now we just instantiate a
   // regular Chisel Queue as mock SRL queue "behavioral model"
 
-  /*
-  val mockQ = Module(new Queue(UInt(), depthElems)).io
-  io.count := mockQ.count
-  mockQ.enq.valid := io.iValid
-  mockQ.enq.bits := io.iData
-  io.oData := mockQ.deq.bits
-  io.oValid := mockQ.deq.valid
+  val mockQ = Module(new Queue(UInt(), depthElems))
+  io.count := mockQ.io.count
+  mockQ.io.enq.valid := io.i_v
+  mockQ.io.enq.bits := io.i_d
+  io.o_d := mockQ.io.deq.bits
+  io.o_v := mockQ.io.deq.valid
   // ready signals connected to backpressure and vice versa
-  io.iBackPressure := !mockQ.enq.ready
-  mockQ.deq.ready := !io.oBackPressure
-*/
-}
+  io.i_b := !mockQ.io.enq.ready
+  mockQ.io.deq.ready := !io.o_b
 
+}
 
 class SRLQueue[T <: Data](gen: T, val entries: Int) extends Module {
   val io = IO(new QueueIO(gen, entries))
@@ -82,7 +76,6 @@ class SRLQueue[T <: Data](gen: T, val entries: Int) extends Module {
   srlQ.o_b := !io.deq.ready
   io.enq.ready := !srlQ.i_b
 }
-
 
 class BRAMQueue[T <: Data](gen: T, val entries: Int) extends Module {
   val io = IO(new QueueIO(gen, entries))
@@ -129,20 +122,20 @@ class BRAMQueue[T <: Data](gen: T, val entries: Int) extends Module {
 
   val do_enq = io.enq.ready && io.enq.valid
   val do_deq = canPrefetch && !empty
-  when (do_enq) {
+  when(do_enq) {
     writePort.req.writeEn := true.B
     enq_ptr.inc()
   }
-  when (do_deq) {
+  when(do_deq) {
     deq_ptr.inc()
   }
-  when (do_enq != do_deq) {
+  when(do_enq =/= do_deq) {
     maybe_full := do_enq
   }
 
   io.enq.ready := !full
 
-  //pf.enq.valid := Reg(init = false.B, next = do_deq)
+  // pf.enq.valid := Reg(init = false.B, next = do_deq)
   pf.enq.valid := RegInit(false.B)
   pf.enq.valid := do_deq
   pf.enq.bits := readPort.rsp.readData.asTypeOf(pf.enq.bits)
@@ -154,21 +147,20 @@ class BRAMQueue[T <: Data](gen: T, val entries: Int) extends Module {
   if (isPow2(entries)) {
     io.count := Cat(maybe_full && ptr_match, ptr_diff) + pf.count
   } else {
-    io.count := Mux(ptr_match,
-                    Mux(maybe_full,
-                      entries.U, 0.U),
-                    Mux(deq_ptr.value > enq_ptr.value,
-                      entries.U + ptr_diff, ptr_diff)) + pf.count
+    io.count := Mux(
+      ptr_match,
+      Mux(maybe_full, entries.U, 0.U),
+      Mux(deq_ptr.value > enq_ptr.value, entries.U + ptr_diff, ptr_diff)
+    ) + pf.count
   }
 }
-
 
 // creates a queue either using standard Chisel queues (for smaller queues)
 // or with FPGA TDP BRAMs as the storage (for larger queues)
 class FPGAQueue[T <: Data](gen: T, val entries: Int) extends Module {
   val thresholdBigQueue = 64 // threshold for deciding big or small queue impl
   val io = IO(new QueueIO(gen, entries))
-  if(entries < thresholdBigQueue) {
+  if (entries < thresholdBigQueue) {
     // create a shift register (SRL)-based queue
     val theQueue = Module(new SRLQueue(gen, entries)).io
     theQueue <> io
@@ -179,9 +171,11 @@ class FPGAQueue[T <: Data](gen: T, val entries: Int) extends Module {
   }
 }
 
-object FPGAQueue
-{
-  def apply[T <: Data](enq: DecoupledIO[T], entries: Int = 2): DecoupledIO[T]  = {
+object FPGAQueue {
+  def apply[T <: Data](
+      enq: DecoupledIO[T],
+      entries: Int = 2
+  ): DecoupledIO[T] = {
     val q = Module(new FPGAQueue(enq.bits.cloneType, entries))
     q.io.enq.valid := enq.valid // not using <> so that override is allowed
     q.io.enq.bits := enq.bits

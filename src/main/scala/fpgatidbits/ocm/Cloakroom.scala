@@ -17,56 +17,62 @@ import fpgatidbits.dma._
 // out, you would use the ticket to get back your cloak. this is why this
 // family of modules are named "cloakroom".
 
-
 class CloakroomBundle(num: Int) extends PrintableBundle {
   val id = UInt(log2Ceil(num).W)
 
   val printfStr = "id = %d\n"
-  val printfElems = {() => Seq(id)}
+  val printfElems = { () => Seq(id) }
 
-  override def cloneType: this.type = new CloakroomBundle(num).asInstanceOf[this.type]
 }
 
-class CloakroomIF
-[TA <: Data, TB <: CloakroomBundle, TC <: CloakroomBundle, TD <: Data]
-(genA: TA,
- undress: TA => TB,
- genC: TC,
- dress: (TA, TC) => TD,
- genB: TB,
- genD: TD)
-extends Bundle {
-  val extIn = Flipped(Decoupled(genA.cloneType)) //GatherReq
-  val intOut = Decoupled(genB.cloneType) //Undress(InternalReq)
-  val intIn = Flipped(Decoupled(genC.cloneType)) //GatherResp
-  val extOut = Decoupled(genD.cloneType) //InternalResp
+class CloakroomIF[
+    TA <: Data,
+    TB <: CloakroomBundle,
+    TC <: CloakroomBundle,
+    TD <: Data
+](
+    genA: TA,
+    undress: TA => TB,
+    genC: TC,
+    dress: (TA, TC) => TD,
+    genB: TB,
+    genD: TD
+) extends Bundle {
+  val extIn = Flipped(Decoupled(genA.cloneType)) // GatherReq
+  val intOut = Decoupled(genB.cloneType) // Undress(InternalReq)
+  val intIn = Flipped(Decoupled(genC.cloneType)) // GatherResp
+  val extOut = Decoupled(genD.cloneType) // InternalResp
 
-  override def cloneType: this.type = new CloakroomIF(genA, undress, genC, dress, genB, genD).asInstanceOf[this.type]
 }
-
 
 // based on LUTRAM, shouldn't be used for large cloakrooms
 /* TODO add input/output queues? */
-class CloakroomLUTRAM
-[TA <: Data, TB <: CloakroomBundle, TC <: CloakroomBundle, TD <: Data]
-(num: Int,
- genA: TA,
- undress: TA => TB,
- genC: TC,
- dress: (TA, TC) => TD,
- genB: TB,
- genD: TD)
-extends Module {
-  val io = IO(new CloakroomIF(genA.cloneType, undress, genC.cloneType, dress, genB, genD))
+class CloakroomLUTRAM[
+    TA <: Data,
+    TB <: CloakroomBundle,
+    TC <: CloakroomBundle,
+    TD <: Data
+](
+    num: Int,
+    genA: TA,
+    undress: TA => TB,
+    genC: TC,
+    dress: (TA, TC) => TD,
+    genB: TB,
+    genD: TD
+) extends Module {
+  val io = IO(
+    new CloakroomIF(genA.cloneType, undress, genC.cloneType, dress, genB, genD)
+  )
 
   // context store (where the "cloaks" will be kept)
-  //val ctxStore = Mem(genA.cloneType, num)
+  // val ctxStore = Mem(genA.cloneType, num)
   val ctxStore = SyncReadMem(num, genA.cloneType)
 
   // pool of available request IDs ("tickets" in the cloakrooms)
   val idPool = Module(new ReqIDQueue(log2Ceil(num), num, 0)).io
 
-  //erlingrj initialize fully
+  // erlingrj initialize fully
   idPool.doInit := false.B
   idPool.initCount := num.U
 
@@ -78,11 +84,11 @@ extends Module {
   }
 
   // join up available IDs with incoming requests, expose as intOut
-   StreamJoin(
-     inA = io.extIn,
-     inB = idPool.idOut,
-     genO = io.intOut.bits.cloneType,
-     join = joinFxn
+  StreamJoin(
+    inA = io.extIn,
+    inB = idPool.idOut,
+    genO = io.intOut.bits.cloneType,
+    join = joinFxn
   ) <> io.intOut
 
   // add to context store when intOut is ready to go
@@ -93,39 +99,51 @@ extends Module {
   // load context for incoming intIn
   val readyRespCtx = ctxStore(io.intIn.bits.id)
 
-  val readyResps = Module(new StreamFork(
-    genIn = genC.cloneType, genA = UInt(log2Ceil(num).W),
-    genB = genC.cloneType,
-    forkA = {c: TC => c.id},
-    forkB = {c: TC => c}
-  )).io
-
+  val readyResps = Module(
+    new StreamFork(
+      genIn = genC.cloneType,
+      genA = UInt(log2Ceil(num).W),
+      genB = genC.cloneType,
+      forkA = { c: TC => c.id },
+      forkB = { c: TC => c }
+    )
+  ).io
 
   io.intIn <> readyResps.in
-  readyResps.outA <> idPool.idIn  // recycle used tickets back into the pool
+  readyResps.outA <> idPool.idIn // recycle used tickets back into the pool
 
   io.extOut.valid := readyResps.outB.valid
   io.extOut.bits := dress(readyRespCtx, readyResps.outB.bits)
   readyResps.outB.ready := io.extOut.ready
 }
 
-
 // cloakroom using BRAM as the context store, can be scaled to larger windows
-class CloakroomBRAM
-[TA <: Data, TB <: CloakroomBundle, TC <: CloakroomBundle, TD <: Data]
-(num: Int, genA: TA, undress: TA => TB, genC: TC, dress: (TA, TC) => TD, genB: TB, genD: TD)
-extends Module {
-  val io = IO(new CloakroomIF(genA.cloneType, undress, genC.cloneType, dress, genB, genD))
+class CloakroomBRAM[
+    TA <: Data,
+    TB <: CloakroomBundle,
+    TC <: CloakroomBundle,
+    TD <: Data
+](
+    num: Int,
+    genA: TA,
+    undress: TA => TB,
+    genC: TC,
+    dress: (TA, TC) => TD,
+    genB: TB,
+    genD: TD
+) extends Module {
+  val io = IO(
+    new CloakroomIF(genA.cloneType, undress, genC.cloneType, dress, genB, genD)
+  )
 
   // context store (where the "cloaks" will be kept)
   val ctxSize = genA.getWidth
-  val ctxLat = 1  // latency to read context
+  val ctxLat = 1 // latency to read context
   val ctxStoreExt = Module(new DualPortBRAM(log2Up(num), ctxSize)).io
   val ctxStore = Wire(new DualPortBRAMIOWrapper(log2Up(num), ctxSize))
   ctxStoreExt.clk := clock
   ctxStoreExt.a.connect(ctxStore.ports(0))
   ctxStoreExt.b.connect(ctxStore.ports(1))
-
 
   val ctxWrite = ctxStore.ports(0)
   val ctxRead = ctxStore.ports(1)
@@ -141,8 +159,11 @@ extends Module {
   }
 
   // join up available IDs with incoming requests, expose as intOut
-   StreamJoin(inA = io.extIn, inB = idPool.idOut,
-    genO = io.intOut.bits.cloneType, join = joinFxn
+  StreamJoin(
+    inA = io.extIn,
+    inB = idPool.idOut,
+    genO = io.intOut.bits.cloneType,
+    join = joinFxn
   ) <> io.intOut
 
   // add to context store when intOut is ready to go
@@ -159,7 +180,6 @@ extends Module {
   class IntInWithCtx extends Bundle {
     val intIn = genC.cloneType
     val ctx = genA.cloneType
-    override def cloneType: this.type = new IntInWithCtx().asInstanceOf[this.type]
   }
   val intInWithCtx = new IntInWithCtx()
 
@@ -177,20 +197,23 @@ extends Module {
   io.intIn.ready := canDoRead
 
   // feed queue through StreamFork to recycle IDs and generate responses
-  val readyResps = Module(new StreamFork(
-    genIn = intInWithCtx.cloneType, genA = UInt(log2Ceil(num).W),
-    genB = io.extOut.bits.cloneType,
-    forkA = {x: IntInWithCtx => x.intIn.id},
-    forkB = {x: IntInWithCtx => dress(x.ctx, x.intIn)}
-  )).io
+  val readyResps = Module(
+    new StreamFork(
+      genIn = intInWithCtx.cloneType,
+      genA = UInt(log2Ceil(num).W),
+      genB = io.extOut.bits.cloneType,
+      forkA = { x: IntInWithCtx => x.intIn.id },
+      forkB = { x: IntInWithCtx => dress(x.ctx, x.intIn) }
+    )
+  ).io
 
   intInWithCtxQ.deq <> readyResps.in
-  readyResps.outA <> idPool.idIn  // recycle used tickets back into the pool
+  readyResps.outA <> idPool.idIn // recycle used tickets back into the pool
   readyResps.outB <> io.extOut
 }
 
-class CloakroomOrderBuffer[TC <: CloakroomBundle]
-(num: Int, genC: TC) extends Module {
+class CloakroomOrderBuffer[TC <: CloakroomBundle](num: Int, genC: TC)
+    extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(genC.cloneType))
     val out = Decoupled(genC.cloneType)
@@ -206,15 +229,20 @@ class CloakroomOrderBuffer[TC <: CloakroomBundle]
   // TODO do we need bypass logic?
 
   // storage BRAM for incoming responses
-  val storageExt = Module(new DualPortBRAM(
-    addrBits = idBits, dataBits = genC.getWidth
-  )).io
+  val storageExt = Module(
+    new DualPortBRAM(
+      addrBits = idBits,
+      dataBits = genC.getWidth
+    )
+  ).io
 
-  val storage = Wire(new DualPortBRAMIOWrapper(
-    addrBits = idBits, dataBits = genC.getWidth
-  ))
+  val storage = Wire(
+    new DualPortBRAMIOWrapper(
+      addrBits = idBits,
+      dataBits = genC.getWidth
+    )
+  )
   storageExt.clk := clock
-
 
   storageExt.a.connect(storage.ports(0))
   storageExt.b.connect(storage.ports(1))
@@ -258,8 +286,8 @@ class CloakroomOrderBuffer[TC <: CloakroomBundle]
   headRsps.enq.bits := (dataRd.rsp.readData).asTypeOf(headRsps.enq.bits)
 
   when(doPopRsp) {
-    when(regHeadInd === (num-1).U) { regHeadInd := 0.U }
-    .otherwise { regHeadInd := regHeadInd + 1.U }
+    when(regHeadInd === (num - 1).U) { regHeadInd := 0.U }
+      .otherwise { regHeadInd := regHeadInd + 1.U }
     finishedClr := UIntToOH(regHeadInd, num)
   }
 
@@ -271,30 +299,39 @@ class CloakroomOrderBuffer[TC <: CloakroomBundle]
 // and it is not necessary to use "tickets" (IDs) on the cloakroom
 // entry or exit
 
-class InOrderCloakroomIF
-[TA <: Data, TB <: Data, TC <: Data, TD <: Data]
-(genA: TA, undress: TA => TB, genC: TC, dress: (TA, TC) => TD)
-extends Bundle {
+class InOrderCloakroomIF[TA <: Data, TB <: Data, TC <: Data, TD <: Data](
+    genA: TA,
+    undress: TA => TB,
+    genC: TC,
+    dress: (TA, TC) => TD
+) extends Bundle {
   val extIn = Flipped(Decoupled(genA.cloneType))
   val intOut = Decoupled(undress(genA.cloneType))
   val intIn = Flipped(Decoupled(genC.cloneType))
   val extOut = Decoupled(dress(genA.cloneType, genC.cloneType))
 
-  override def cloneType: this.type = new InOrderCloakroomIF(genA, undress, genC, dress).asInstanceOf[this.type]
 }
 
-class InOrderCloakroom
-[TA <: Data, TB <: Data, TC <: Data, TD <: Data]
-(num: Int, genA: TA, undress: TA => TB, genC: TC, dress: (TA, TC) => TD)
-extends Module {
+class InOrderCloakroom[TA <: Data, TB <: Data, TC <: Data, TD <: Data](
+    num: Int,
+    genA: TA,
+    undress: TA => TB,
+    genC: TC,
+    dress: (TA, TC) => TD
+) extends Module {
   val io = IO(new InOrderCloakroomIF(genA, undress, genC, dress))
 
   val storage = Module(new FPGAQueue(genA, num)).io
 
-  val forker = Module(new StreamFork(
-    genIn = genA, genA = genA, genB = undress(genA),
-    forkA = {a: TA => a}, forkB = undress
-  )).io
+  val forker = Module(
+    new StreamFork(
+      genIn = genA,
+      genA = genA,
+      genB = undress(genA),
+      forkA = { a: TA => a },
+      forkB = undress
+    )
+  ).io
   io.extIn <> forker.in
   forker.outA <> storage.enq
   forker.outB <> io.intOut

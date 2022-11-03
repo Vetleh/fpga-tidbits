@@ -3,8 +3,11 @@ import chisel3._
 import chisel3.util._
 import org.scalatest._
 import chiseltest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
-class CatExample extends MultiIOModule {
+class CatExample extends Module {
   val io = IO(new Bundle {
     val out = Vec(2, Output(UInt(32.W)))
     val in  = Vec(2, Vec(4, Input(UInt(8.W))))
@@ -24,11 +27,9 @@ class CatExample extends MultiIOModule {
 }
 
 
-class TestCat extends FlatSpec with ChiselScalatestTester with Matchers {
-
-  behavior of "SubWordAssignment"
-  it should "work" in {
-    test(new CatExample) {
+class TestCat extends AnyFreeSpec with ChiselScalatestTester with Matchers {
+  "testCat" in {
+    test(new CatExample()) {
       c =>
         c.io.in(0)(0).poke( "hde".U)
         c.io.in(0)(1).poke( "had".U)

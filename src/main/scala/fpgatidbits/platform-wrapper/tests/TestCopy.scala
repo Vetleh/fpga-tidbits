@@ -10,7 +10,8 @@ import fpgatidbits.streams._
 
 class TestCopy(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 2
-  val io = new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestCopyIO() extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
     val srcAddr = Input(UInt(64.W))
@@ -18,6 +19,7 @@ class TestCopy(p: PlatformWrapperParams) extends GenericAccelerator(p) {
     val byteCount = Input(UInt(32.W))
     val finBytes = Output(UInt(32.W))
   }
+  val io = IO(new TestCopyIO())
   io.signature := makeDefaultSignature()
 
   val rrg = Module(new ReadReqGen(p.toMemReqParams(), 0, 1)).io
@@ -55,14 +57,20 @@ class TestCopy(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   when(!io.start) {
     regNumPendingReqs := 0.U
     regRequestedBytes := 0.U
-  } .otherwise {
+  }.otherwise {
     val reqFired = writePort.memWrReq.valid & writePort.memWrReq.ready
     val rspFired = writePort.memWrRsp.valid & writePort.memWrRsp.ready
 
-    regRequestedBytes := regRequestedBytes + Mux(reqFired, writePort.memWrReq.bits.numBytes, 0.U)
+    regRequestedBytes := regRequestedBytes + Mux(
+      reqFired,
+      writePort.memWrReq.bits.numBytes,
+      0.U
+    )
 
-    when(reqFired && !rspFired) { regNumPendingReqs := regNumPendingReqs + 1.U}
-    .elsewhen(!reqFired && rspFired) { regNumPendingReqs := regNumPendingReqs - 1.U }
+    when(reqFired && !rspFired) { regNumPendingReqs := regNumPendingReqs + 1.U }
+      .elsewhen(!reqFired && rspFired) {
+        regNumPendingReqs := regNumPendingReqs - 1.U
+      }
   }
 
   io.finished := io.start & (regRequestedBytes === io.byteCount) & (regNumPendingReqs === 0.U)

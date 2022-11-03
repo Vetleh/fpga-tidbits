@@ -1,6 +1,5 @@
 package fpgatidbits.PlatformWrapper
 
-
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
@@ -35,18 +34,21 @@ object TesterWrapperParams extends PlatformWrapperParams {
   val coherentMem = false
 }
 
-class TesterWrapper(instFxn: PlatformWrapperParams => GenericAccelerator, targetDir: String)
-extends PlatformWrapper(TesterWrapperParams, instFxn) {
-  override def desiredName  = "TesterWrapper"
+class TesterWrapper(
+    instFxn: PlatformWrapperParams => GenericAccelerator,
+    targetDir: String
+) extends PlatformWrapper(TesterWrapperParams, instFxn) {
+  override def desiredName = "TesterWrapper"
 
   val platformDriverFiles = baseDriverFiles ++ Array[String](
-    "platform-tester.cpp", "testerdriver.hpp"
+    "platform-tester.cpp",
+    "testerdriver.hpp"
   )
 
   val memWords = 64 * 1024 * 1024
   val mrp = p.toMemReqParams()
   val memAddrBits = log2Ceil(memWords)
-  val memUnitBytes = (p.memDataBits/8).U
+  val memUnitBytes = (p.memDataBits / 8).U
   val io = IO(new Bundle {
     // register file access
     val regFileIF = new RegFileSlaveIF(regAddrBits, p.csrDataBits)
@@ -62,27 +64,27 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
   io.regFileIF <> regFile.extIF
 
   // instantiate the "main memory"
-  //val mem = Mem(UInt(width=p.memDataBits), memWords)
+  // val mem = Mem(UInt(width=p.memDataBits), memWords)
   val mem = SyncReadMem(memWords, UInt(p.memDataBits.W))
 
   // testbench memory access
-  def addrToWord(x: UInt) = {x >> (log2Ceil(p.memDataBits/8))}
+  def addrToWord(x: UInt) = { x >> (log2Ceil(p.memDataBits / 8)) }
   val memWord = addrToWord(io.memAddr)
   io.memReadData := mem.read(memWord)
 
-  when (io.memWriteEn) {mem.write(memWord, io.memWriteData)}
+  when(io.memWriteEn) { mem.write(memWord, io.memWriteData) }
 
   def addLatency[T <: Data](n: Int, prod: DecoupledIO[T]): DecoupledIO[T] = {
-    if(n == 1) {
+    if (n == 1) {
       return Queue(prod, 2)
     } else {
-      return addLatency(n-1, Queue(prod, 2))
+      return addLatency(n - 1, Queue(prod, 2))
     }
   }
 
   // accelerator memory access ports
   // one FSM per port, rather simple, but supports bursts
-  for(i <- 0 until accel.numMemPorts) {
+  for (i <- 0 until accel.numMemPorts) {
     // reads
     val sWaitRd :: sRead :: sReadRsp :: Nil = Enum(3)
     val regStateRead = RegInit(sWaitRd)
@@ -95,11 +97,9 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
 
     wireMemReadData := mem(addrToWord(wireMemReadAddr))
 
-
     val accmp = accio.memPort(i)
     val accRdReq = addLatency(15, accmp.memRdReq)
     val accRdRsp = accmp.memRdRsp
-
 
     accRdRsp.bits := regReadResponse
     accRdReq.ready := false.B
@@ -111,12 +111,11 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
     accRdRsp.bits.isLast := false.B
     accRdRsp.bits.readData := wireMemReadData
 
-
-    regReadResponseValid := false.B //Defaults to false
+    regReadResponseValid := false.B // Defaults to false
     switch(regStateRead) {
       is(sWaitRd) {
         accRdReq.ready := true.B
-        when (accRdReq.valid) {
+        when(accRdReq.valid) {
           regReadRequest := accRdReq.bits
           regStateRead := sRead
         }
@@ -143,30 +142,30 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
             regStateRead := sReadRsp
           }
       }
-      is (sReadRsp) {
-          // SyncReadMem readData reponse has arrived
+      is(sReadRsp) {
+        // SyncReadMem readData reponse has arrived
 
-          when (accRdRsp.ready) {
-            regReadRequest.numBytes := regReadRequest.numBytes - memUnitBytes
-            regReadRequest.addr := regReadRequest.addr + (memUnitBytes)
-            regReadResponseValid := false.B
+        when(accRdRsp.ready) {
+          regReadRequest.numBytes := regReadRequest.numBytes - memUnitBytes
+          regReadRequest.addr := regReadRequest.addr + (memUnitBytes)
+          regReadResponseValid := false.B
 
-            when(regReadRequest.numBytes === memUnitBytes) {
-              // prefetch the read request if possible to minimize waiting
-              accRdReq.ready := true.B
-              when (accRdReq.valid) {
-                regReadRequest := accRdReq.bits
-                regStateRead := sRead
-                // stay in this state and continue processing
-              }.otherwise {
-                regStateRead := sWaitRd
-              }
-            }.otherwise {
+          when(regReadRequest.numBytes === memUnitBytes) {
+            // prefetch the read request if possible to minimize waiting
+            accRdReq.ready := true.B
+            when(accRdReq.valid) {
+              regReadRequest := accRdReq.bits
               regStateRead := sRead
+              // stay in this state and continue processing
+            }.otherwise {
+              regStateRead := sWaitRd
             }
+          }.otherwise {
+            regStateRead := sRead
           }
         }
       }
+    }
 
     // writes
     val sWaitWr :: sWrite :: Nil = Enum(2)
@@ -199,27 +198,26 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
       }
 
       is(sWrite) {
-        when(regWriteRequest.numBytes === 0.U) {regStateWrite := sWaitWr}
-        .otherwise {
-          when(wrRspQ.enq.ready && wrDatQ.deq.valid) {
-            when(regWriteRequest.numBytes === memUnitBytes) {
-              wrRspQ.enq.valid := true.B
+        when(regWriteRequest.numBytes === 0.U) { regStateWrite := sWaitWr }
+          .otherwise {
+            when(wrRspQ.enq.ready && wrDatQ.deq.valid) {
+              when(regWriteRequest.numBytes === memUnitBytes) {
+                wrRspQ.enq.valid := true.B
+              }
+              wrDatQ.deq.ready := true.B
+              mem(addrToWord(regWriteRequest.addr)) := wrDatQ.deq.bits
+              regWriteRequest.numBytes := regWriteRequest.numBytes - memUnitBytes
+              regWriteRequest.addr := regWriteRequest.addr + (memUnitBytes)
             }
-            wrDatQ.deq.ready := true.B
-            mem(addrToWord(regWriteRequest.addr)) := wrDatQ.deq.bits
-            regWriteRequest.numBytes := regWriteRequest.numBytes - memUnitBytes
-            regWriteRequest.addr := regWriteRequest.addr + (memUnitBytes)
           }
-        }
       }
     }
   }
 }
 
-
 class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   // TODO add functions for initializing memory
-  val memUnitBytes = c.memUnitBytes.litValue()
+  val memUnitBytes = c.memUnitBytes.litValue
   val regFile = c.io.regFileIF
   def nameToRegInd(regName: String): Int = {
     return c.regFileMap(regName)(0).toInt
@@ -228,17 +226,17 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   var hooks = scala.collection.mutable.Map[String, HookFxn]()
 
   override def step(n: Int) = {
-    for((n,f) <- hooks) {f()}
+    for ((n, f) <- hooks) { f() }
     super.step(n)
   }
 
   def printAllRegs() = {
     val ks = c.regFileMap.keys
     var regVals = scala.collection.mutable.Map[String, BigInt]()
-    for(k <- ks) {
+    for (k <- ks) {
       regVals(k) = readReg(k)
     }
-    for(k <- ks) {
+    for (k <- ks) {
       println(k + " : " + regVals(k).toString)
     }
   }
@@ -256,7 +254,7 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   }
 
   def expectReg(regName: String, value: BigInt): Boolean = {
-    return expect(readReg(regName)==value, regName)
+    return expect(readReg(regName) == value, regName)
   }
 
   def writeReg(regName: String, value: BigInt) = {
@@ -277,7 +275,7 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   }
 
   def expectMem(addr: BigInt, value: BigInt): Boolean = {
-    return expect(readMem(addr) == value, "Mem: "+addr.toString)
+    return expect(readMem(addr) == value, "Mem: " + addr.toString)
   }
 
   def writeMem(addr: BigInt, value: BigInt) = {
@@ -291,7 +289,7 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   // read file and write into memory, starting at <baseAddr>
   def fileToMem(fileName: String, baseAddr: BigInt) = {
     var buf = Files.readAllBytes(Paths.get(fileName))
-    println("Loading "+fileName+" to baseAddr "+baseAddr.toString)
+    println("Loading " + fileName + " to baseAddr " + baseAddr.toString)
     arrayToMem(buf, baseAddr)
   }
 
@@ -301,31 +299,31 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   // expect problems:
   // every <memory-width> byte group is reversed while being written
   def arrayToMem(buf: Array[Byte], baseAddr: BigInt) = {
-    if(baseAddr % memUnitBytes != 0) {
+    if (baseAddr % memUnitBytes != 0) {
       println("fileToMem: base addr must be multiple of mem unit width")
       System.exit(-1)
     }
     var i: Int = 0
-    for(b <- buf.grouped(c.p.memDataBits/8)) {
-      val w : BigInt = new BigInt(new java.math.BigInteger(b.reverse))
+    for (b <- buf.grouped(c.p.memDataBits / 8)) {
+      val w: BigInt = new BigInt(new java.math.BigInteger(b.reverse))
 
-      //println("Read: " + valueOf(w.toByteArray))
-      //println("Read: " +i.toString+ "=" + valueOf(b))
-      writeMem(baseAddr+i*memUnitBytes, w)
+      // println("Read: " + valueOf(w.toByteArray))
+      // println("Read: " +i.toString+ "=" + valueOf(b))
+      writeMem(baseAddr + i * memUnitBytes, w)
       i += 1
     }
   }
 
   def memToFile(fileName: String, baseAddr: BigInt, wordCount: Int) = {
     val fout = new FileOutputStream(fileName)
-    for(i <- 0 until wordCount) {
-      var ba = readMem(baseAddr+i*memUnitBytes).toByteArray
+    for (i <- 0 until wordCount) {
+      var ba = readMem(baseAddr + i * memUnitBytes).toByteArray
       // the BigInt.toByteArray occasionally returns too many bytes,
       // not sure why
       if (ba.size > memUnitBytes) { ba = ba.takeRight(memUnitBytes.toInt) }
       // BigInt.toByteArray returns the min # of bytes needed, pad to
       // cover all bytes read from memory by adding zeroes
-      while(ba.size < memUnitBytes) {
+      while (ba.size < memUnitBytes) {
         ba = ba ++ Array[Byte](0)
       }
       ba = ba.reverse
@@ -340,7 +338,7 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
 }
 
 class VerilatedTesterWrapper(instFxn: PlatformWrapperParams => GenericAccelerator, targetDir: String)
-extends TesterWrapper(instFxn, targetDir) {
+  extends TesterWrapper(instFxn, targetDir) {
   override val platformDriverFiles = baseDriverFiles ++ Array[String](
     "platform-verilatedtester.cpp", "verilatedtesterdriver.hpp"
   )
@@ -356,11 +354,10 @@ extends TesterWrapper(instFxn, targetDir) {
   val driverFiles = Seq("wrapperregdriver.h", "platform-verilatedtester.cpp",
     "platform.h", "verilatedtesterdriver.hpp")
 
-  val resRoot = Paths.get("./src/main/resources").toAbsolutePath
+  val resRoot = Paths.get("./fpga-tidbits/src/main/resources").toAbsolutePath
   // copy blackbox verilog, scripts, driver and SW support files
   fileCopyBulk(s"$resRoot/verilog/", targetDir, verilogBlackBoxFiles)
   fileCopyBulk(s"$resRoot/script/", targetDir, scriptFiles)
   fileCopyBulk(s"$resRoot/cpp/platform-wrapper-regdriver/", targetDir,
     driverFiles)
 }
-

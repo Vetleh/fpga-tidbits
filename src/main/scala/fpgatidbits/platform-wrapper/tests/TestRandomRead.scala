@@ -8,7 +8,8 @@ import fpgatidbits.streams._
 
 class TestRandomRead(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 2
-  val io = new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestRandomRead() extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
     val indsBase = Input(UInt(64.W))
@@ -16,13 +17,15 @@ class TestRandomRead(p: PlatformWrapperParams) extends GenericAccelerator(p) {
     val count = Input(UInt(32.W))
     val sum = Output(UInt(32.W))
   }
+  val io = IO(new TestRandomRead())
+
   io.signature := makeDefaultSignature()
   // plug unused ports
   plugMemWritePort(0)
   plugMemWritePort(1)
 
   val rrgInds = Module(new ReadReqGen(p.toMemReqParams(), 0, 1)).io
-  val opBytes = (p.memDataBits/8).U
+  val opBytes = (p.memDataBits / 8).U
 
   rrgInds.ctrl.start := io.start
   rrgInds.ctrl.throttle := false.B
@@ -33,7 +36,7 @@ class TestRandomRead(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   def idsToReqs(ids: DecoupledIO[UInt]): DecoupledIO[GenericMemoryRequest] = {
     val reqs = Decoupled(new GenericMemoryRequest(p.toMemReqParams()))
     val req = reqs.bits
-    req.channelID := 0.U  // TODO parametrize!
+    req.channelID := 0.U // TODO parametrize!
     req.isWrite := false.B
     req.addr := io.valsBase + ids.bits * opBytes
     req.numBytes := opBytes // single-beat burst
@@ -44,15 +47,20 @@ class TestRandomRead(p: PlatformWrapperParams) extends GenericAccelerator(p) {
 
     return reqs
   }
-  val readDataFilter = {x: GenericMemoryResponse => x.readData}
+  val readDataFilter = { x: GenericMemoryResponse => x.readData }
 
-  val readInds = StreamFilter(io.memPort(0).memRdRsp, UInt(p.memDataBits.W), readDataFilter)
+  val readInds =
+    StreamFilter(io.memPort(0).memRdRsp, UInt(p.memDataBits.W), readDataFilter)
   io.memPort(1).memRdReq <> idsToReqs(readInds)
 
-  val red = Module(new StreamReducer(p.memDataBits, 0, {_+_})).io
+  val red = Module(new StreamReducer(p.memDataBits, 0, { _ + _ })).io
   red.start := io.start
   red.byteCount := io.count * opBytes
-  red.streamIn <> StreamFilter(io.memPort(1).memRdRsp, UInt(p.memDataBits.W), readDataFilter)
+  red.streamIn <> StreamFilter(
+    io.memPort(1).memRdRsp,
+    UInt(p.memDataBits.W),
+    readDataFilter
+  )
 
   io.sum := red.reduced
   io.finished := red.finished

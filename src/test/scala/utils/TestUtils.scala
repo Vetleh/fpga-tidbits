@@ -2,12 +2,14 @@ package utils
 
 import chisel3._
 import chisel3.util._
-import chisel3.iotesters._
+import chiseltest._
 import org.scalatest._
+import org.scalatest.freespec.AnyFreeSpec
 
 import fpgatidbits.utils.BitExtraction
+import org.scalatest.matchers.should.Matchers
 
-class TestWrapper extends MultiIOModule {
+class TestWrapper extends Module {
   val io = IO( new Bundle {
     val word = Input(UInt(32.W))
     val high = Input(UInt(8.W))
@@ -20,37 +22,21 @@ class TestWrapper extends MultiIOModule {
 
 
 
-class TestUtils(dut: TestWrapper) extends PeekPokeTester(dut) {
-  def TestBitExtraction(in: Int, h: Int, l: Int) = {
+class TestUtils() extends AnyFreeSpec with ChiselScalatestTester {
+  "TestBitExtraction" in {
+      test(new TestWrapper()) { c =>
+        def TestBitExtraction(in: Int, h: Int, l: Int) = {
+          c.io.word.poke(in.U)
+          c.io.high.poke(h.U)
+          c.io.low.poke(l.U)
+          c.clock.step(1)
+          c.io.result.expect(in.U(32.W)(h,l))
+        }
 
-    poke(dut.io.word, in.U)
-    poke(dut.io.high, h.U)
-    poke(dut.io.low, l.U)
-    step(1)
-    expect(dut.io.result, in.U(32.W)(h,l))
-  }
-
-  TestBitExtraction(123456789,8,1)
-  TestBitExtraction(123456789,7,6)
-  TestBitExtraction(123456789,32,4)
-  TestBitExtraction(123456789,3,0)
-}
-
-
-
-class SimpleSpec extends FlatSpec with Matchers {
-/*
-  val t = new TestUtils
-  "BitExtraction" should "pass" in {
-    t.TestBitExtraction()
-  }
- */
-    "BitExtraction" should "pass" in {
-        chisel3.iotesters.Driver(
-          () => new TestWrapper)
-        {
-          c => new TestUtils(c)
-        } should be (true)
+        TestBitExtraction(123456789,8,1)
+        TestBitExtraction(123456789,7,6)
+        TestBitExtraction(123456789,32,4)
+        TestBitExtraction(123456789,3,0)
+      }
     }
-
 }

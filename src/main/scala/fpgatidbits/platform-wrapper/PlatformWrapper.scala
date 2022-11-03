@@ -51,7 +51,7 @@ trait PlatformWrapperParams {
 // - do reads/writes to the regfile from the platform memory-mapped interface
 abstract class PlatformWrapper
 (val p: PlatformWrapperParams,
-val instFxn: PlatformWrapperParams => GenericAccelerator)  extends MultiIOModule {
+val instFxn: PlatformWrapperParams => GenericAccelerator)  extends Module {
   type RegFileMap = LinkedHashMap[String, Array[Int]]
 
   // a list of files that will be needed for compiling drivers for platform
@@ -324,11 +324,12 @@ protected:
 
     import java.io._
     // Create file
-    val filename = targetDir+driverName+".hpp"
+    println("Target dir is: " + targetDir)
+    val filename = targetDir + driverName + ".hpp"
     println(filename)
     val file = new File(filename)
     if (!file.exists()) {
-      file.getParentFile.mkdirs
+      file.getParentFile.mkdirs()
       file.createNewFile()
     }
     val writer = new PrintWriter(file)

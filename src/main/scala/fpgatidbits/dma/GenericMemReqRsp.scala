@@ -7,17 +7,21 @@ import fpgatidbits.streams.PrintableBundle
 
 // MemReqParams describes what memory requests look like
 class MemReqParams(
-  // all units are "number of bits"
-  val addrWidth: Int,       // width of memory addresses
-  val dataWidth: Int,       // width of reads/writes
-  val idWidth: Int,         // width of channel ID
-  val metaDataWidth: Int,   // width of metadata (cache, prot, etc.)
-  val sameIDInOrder: Boolean = true // whether requests with the same
-                                    // ID return in-order, like in AXI
+    // all units are "number of bits"
+    val addrWidth: Int, // width of memory addresses
+    val dataWidth: Int, // width of reads/writes
+    val idWidth: Int, // width of channel ID
+    val metaDataWidth: Int, // width of metadata (cache, prot, etc.)
+    val sameIDInOrder: Boolean = true // whether requests with the same
+    // ID return in-order, like in AXI
 ) {
   override def clone = {
     new MemReqParams(
-      addrWidth, dataWidth, idWidth, metaDataWidth, sameIDInOrder
+      addrWidth,
+      dataWidth,
+      idWidth,
+      metaDataWidth,
+      sameIDInOrder
     ).asInstanceOf[this.type]
   }
 }
@@ -36,11 +40,7 @@ class GenericMemoryRequest(p: MemReqParams) extends PrintableBundle {
   val metaData = UInt(p.metaDataWidth.W)
 
   val printfStr = "id %d addr %d numBytes %d \n"
-  val printfElems = {() => Seq(channelID, addr, numBytes)}
-
-  override def cloneType = {
-    new GenericMemoryRequest(p).asInstanceOf[this.type]
-  }
+  val printfElems = { () => Seq(channelID, addr, numBytes) }
 
   def driveDefaults() = {
     channelID := 0.U
@@ -58,8 +58,13 @@ object GenericMemoryRequest {
     n
   }
 
-  def apply(p: MemReqParams, addr: UInt, write:Bool,
-    id: UInt, numBytes: UInt): GenericMemoryRequest = {
+  def apply(
+      p: MemReqParams,
+      addr: UInt,
+      write: Bool,
+      id: UInt,
+      numBytes: UInt
+  ): GenericMemoryRequest = {
     val n = Wire(new GenericMemoryRequest(p))
     n.metaData := 0.U
     n.addr := addr
@@ -85,11 +90,7 @@ class GenericMemoryResponse(p: MemReqParams) extends PrintableBundle {
   val metaData = UInt(p.metaDataWidth.W)
 
   val printfStr = "id %d readData %x isLast %d \n"
-  val printfElems = {() => Seq(channelID, readData, isLast)}
-
-  override def cloneType = {
-    new GenericMemoryResponse(p).asInstanceOf[this.type]
-  }
+  val printfElems = { () => Seq(channelID, readData, isLast) }
 
   def driveDefaults() = {
     channelID := 0.U
@@ -136,15 +137,21 @@ class SimplexMemoryMasterPort(private val p: MemReqParams) extends Bundle {
   val rsp = Flipped(Decoupled(new GenericMemoryResponse(p)))
 }
 
-class SimplexMemorySlavePort(private val p: MemReqParams) extends SimplexMemoryMasterPort(p) {
+class SimplexMemorySlavePort(private val p: MemReqParams)
+    extends SimplexMemoryMasterPort(p) {
   override val req = Flipped(Decoupled(new GenericMemoryRequest(p)))
   override val wrdat = Flipped(Decoupled(UInt(p.dataWidth.W)))
   override val rsp = Decoupled(new GenericMemoryResponse(p))
 }
 
 // derive a read-write deinterleaver for handling the responses
-class QueuedRdWrDeinterleaver(private val p: MemReqParams) extends QueuedDeinterleaver(2, p, 4,
- routeFxn = {x: GenericMemoryResponse => Mux(x.isWrite, 1.U, 0.U)})
+class QueuedRdWrDeinterleaver(private val p: MemReqParams)
+    extends QueuedDeinterleaver(
+      2,
+      p,
+      4,
+      routeFxn = { x: GenericMemoryResponse => Mux(x.isWrite, 1.U, 0.U) }
+    )
 
 // adapter for duplex <> simplex
 class SimplexAdapter(private val p: MemReqParams) extends Module {
@@ -174,7 +181,7 @@ class SimplexAdapter(private val p: MemReqParams) extends Module {
   // yet ready, sync the write request-data streams
   // TODO this won't work for write bursts!
 
-/*
+  /*
   val simplexWDQ = Module(new FPGAQueue(UInt(width = p.dataWidth), 2)).io
   simplexWDQ.deq <> io.simplex.wrdat
   mux.reqIn(1).valid := wrReqQ.valid & wrDatQ.valid & simplexWDQ.enq.ready
@@ -183,7 +190,7 @@ class SimplexAdapter(private val p: MemReqParams) extends Module {
   wrDatQ.ready := wrReqQ.valid &  simplexWDQ.enq.ready & mux.reqIn(1).ready
   mux.reqIn(1).bits := wrReqQ.bits
   simplexWDQ.enq.bits := wrDatQ.bits
-*/
+   */
 
   val demux = Module(new QueuedRdWrDeinterleaver(p)).io
   io.simplex.rsp <> demux.rspIn

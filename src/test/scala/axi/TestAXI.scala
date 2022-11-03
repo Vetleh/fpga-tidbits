@@ -6,13 +6,15 @@ import chisel3.iotesters._
 import org.scalatest._
 
 import fpgatidbits.Testbenches.TestSum
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
 
   // This test uses the AXI CSR interface and writes a value to a register
   def TestWriteCSR(value: Int, regId: Int) = {
 
-    val addr = regId*4 //We do byte addressing
+    val addr = regId * 4 // We do byte addressing
 
     // Write register 3 == bytecount register
     step(4)
@@ -29,14 +31,14 @@ class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
     var wready = peek(dut.extCsrIf.WREADY) == 1
     var i = 0
     while (!awready || !wready) {
-      step(1); i+=1
+      step(1); i += 1
       if (!awready) awready = peek(dut.extCsrIf.AWREADY) == 1
       if (!wready) wready = peek(dut.extCsrIf.WREADY) == 1
       if (i > 100) {
         println("awready/wready fail")
         fail
-        awready=true
-        wready=true
+        awready = true
+        wready = true
       };
     }
     println("Got awready and wready")
@@ -52,7 +54,7 @@ class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
 
     i = 0
     while (!bvalid) {
-      step(1); i+=1
+      step(1); i += 1
       bvalid = peek(dut.extCsrIf.BVALID) == 1
 
       if (i > 1000) {
@@ -70,24 +72,22 @@ class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
 
   // TestReadCSR uses the AXI interface to read the value in a given register
   def TestReadCSR(regId: Int): BigInt = {
-    val addr = regId*4
+    val addr = regId * 4
     step(4)
-
 
     poke(dut.extCsrIf.ARADDR, addr.U)
     poke(dut.extCsrIf.ARVALID, 1.U)
     poke(dut.extCsrIf.RREADY, 1.U)
 
-
     var arready = peek(dut.extCsrIf.ARREADY) == 1
     var i = 0
     while (!arready) {
-      step(1); i+=1
+      step(1); i += 1
       arready = peek(dut.extCsrIf.ARREADY) == 1
       if (i > 100) {
         println("arready fail")
         fail
-        arready=true
+        arready = true
       };
     }
     println("Got arready")
@@ -100,7 +100,7 @@ class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
 
     i = 0
     while (!rvalid) {
-      step(1); i+=1
+      step(1); i += 1
       rvalid = peek(dut.extCsrIf.RVALID) == 1
 
       if (i > 1000) {
@@ -123,27 +123,38 @@ class TestAXI(dut: ZedBoardWrapper) extends PeekPokeTester(dut) {
     expect(dut.extCsrIf.ARREADY, 1.U)
   }
 
-
   // Run the actual tests
 
   TestCSRReadAddr()
-  TestWriteCSR(value=100, regId=3)
-  val res = TestReadCSR(regId=3)
+  TestWriteCSR(value = 100, regId = 3)
+  val res = TestReadCSR(regId = 3)
   println(s"Wrote 100 and read ${res} from Reg3")
-  assert(TestReadCSR(regId=3) == 100)
+  assert(TestReadCSR(regId = 3) == 100)
 
 }
 
-
-class SimpleSpec extends FlatSpec with Matchers {
-
+class SimpleSpec extends AnyFlatSpec with Matchers {
   "Tester" should "pass" in {
-  val accel = {p => new TestSum(p)}
-  chisel3.iotesters.Driver.
-    execute(Array("--generate-vcd-output", "on", "--wave-form-file-name" ,"TestAXIWave.vcd", "-td" ,"test_run_dir/TestAXI", "--test-seed", "69"),
-      () => new ZedBoardWrapper((accel), targetDir = "_dump", generateRegDriver = false))
-      {
-        c => new TestAXI(c)
-      } should be (true)
+    val accel = { p => new TestSum(p) }
+    chisel3.iotesters.Driver.execute(
+      Array(
+        "--generate-vcd-output",
+        "on",
+        "--wave-form-file-name",
+        "TestAXIWave.vcd",
+        "-td",
+        "test_run_dir/TestAXI",
+        "--test-seed",
+        "69"
+      ),
+      () =>
+        new ZedBoardWrapper(
+          (accel),
+          targetDir = "_dump",
+          generateRegDriver = false
+        )
+    ) { c =>
+      new TestAXI(c)
+    } should be(true)
   }
 }

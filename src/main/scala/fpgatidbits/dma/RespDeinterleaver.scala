@@ -12,30 +12,35 @@ class RespDeinterleaverIF(numPipes: Int, p: MemReqParams) extends Bundle {
   // number of decode errors (ID width no matching pipe)
   val decodeErrors = Output(UInt(32.W))
 
-  override def cloneType = {
-    new RespDeinterleaverIF(numPipes, p).asInstanceOf[this.type]
-  }
 }
 
-class QueuedDeinterleaver(numPipes: Int, p: MemReqParams, n: Int,
-  routeFxn: GenericMemoryResponse => UInt = {x: GenericMemoryResponse => x.channelID}
+class QueuedDeinterleaver(
+    numPipes: Int,
+    p: MemReqParams,
+    n: Int,
+    routeFxn: GenericMemoryResponse => UInt = { x: GenericMemoryResponse =>
+      x.channelID
+    }
 ) extends Module {
 
-  val io = IO(new RespDeinterleaverIF(numPipes,p))
+  val io = IO(new RespDeinterleaverIF(numPipes, p))
   val deint = Module(new RespDeinterleaver(numPipes, p, routeFxn)).io
   deint.rspIn <> io.rspIn
   io.decodeErrors := deint.decodeErrors
 
-
-  for(i <- 0 until numPipes) {
+  for (i <- 0 until numPipes) {
     val rspQ = Module(new FPGAQueue(new GenericMemoryResponse(p), n)).io
     rspQ.deq <> io.rspOut(i)
     rspQ.enq <> deint.rspOut(i)
   }
 }
 
-class RespDeinterleaver(numPipes: Int, p: MemReqParams,
-  routeFxn: GenericMemoryResponse => UInt = {x: GenericMemoryResponse => x.channelID}
+class RespDeinterleaver(
+    numPipes: Int,
+    p: MemReqParams,
+    routeFxn: GenericMemoryResponse => UInt = { x: GenericMemoryResponse =>
+      x.channelID
+    }
 ) extends Module {
   val io = IO(new RespDeinterleaverIF(numPipes, p))
 
@@ -45,7 +50,7 @@ class RespDeinterleaver(numPipes: Int, p: MemReqParams,
   // due to high-fanout signals and combinational paths
   // - to avoid high-fanout signals: implement decoding as e.g shiftreg
   // - to avoid combinational paths, pipeline the deinterleaver
-  for(i <- 0 until numPipes) {
+  for (i <- 0 until numPipes) {
     io.rspOut(i).bits := io.rspIn.bits
     io.rspOut(i).valid := false.B
   }
@@ -57,17 +62,19 @@ class RespDeinterleaver(numPipes: Int, p: MemReqParams,
   val invalidChannel = (destPipe >= (numPipes).U)
   val canProceed = io.rspIn.valid && io.rspOut(destPipe).ready
 
-  when (invalidChannel) {
+  when(invalidChannel) {
     // do not let the entire pipe stall because head of line has invalid dest
     // increment error counter and move on
     regDecodeErrors := regDecodeErrors + 1.U
     io.rspIn.ready := true.B
-    printf("RespDeinterleaver decode error! chanID = %d dest = %d \n",
-      io.rspIn.bits.channelID, destPipe
+    printf(
+      "RespDeinterleaver decode error! chanID = %d dest = %d \n",
+      io.rspIn.bits.channelID,
+      destPipe
     )
   }
-  .elsewhen (canProceed) {
-    io.rspIn.ready := true.B
-    io.rspOut(destPipe).valid := true.B
-  }
+    .elsewhen(canProceed) {
+      io.rspIn.ready := true.B
+      io.rspOut(destPipe).valid := true.B
+    }
 }

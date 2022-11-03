@@ -6,9 +6,11 @@ import org.scalatest._
 import chiseltest._
 
 import fpgatidbits.streams._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 
-class TestStreamCAM extends FlatSpec with ChiselScalatestTester with Matchers {
+class TestStreamCAM extends AnyFlatSpec with ChiselScalatestTester with Matchers {
 
   behavior of "StreamCAM"
   it should "Initalize properly" in {

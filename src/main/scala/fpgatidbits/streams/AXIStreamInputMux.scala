@@ -16,20 +16,18 @@ class AXIStreamInputMux(dataWidth: Int) extends Module {
   io.in0.suggestName("in0")
   io.in1.suggestName("in1")
 
-  io.strm.TDATA := Mux(io.sel === 0.U, io.in0.TDATA, io.in1.TDATA)
-  io.strm.TVALID := Mux(io.sel === 0.U, io.in0.TVALID, io.in1.TVALID)
+  io.strm.bits := Mux(io.sel === 0.U, io.in0.bits, io.in1.bits)
+  io.strm.valid := Mux(io.sel === 0.U, io.in0.valid, io.in1.valid)
 
-  io.in0.TREADY := (io.sel === 0.U) & io.strm.TREADY
-  io.in1.TREADY := (io.sel === 1.U) & io.strm.TREADY
+  io.in0.ready := (io.sel === 0.U) & io.strm.ready
+  io.in1.ready := (io.sel === 1.U) & io.strm.ready
 }
-
 
 class DecoupledInputMuxIO[T <: Data](gen: T, numChans: Int) extends Bundle {
   val sel = Input(UInt(log2Ceil(numChans).W))
   val in = Vec(numChans, Flipped(Decoupled(gen)))
   val out = Decoupled(gen)
 
-  override def cloneType: this.type = new DecoupledInputMuxIO(gen, numChans).asInstanceOf[this.type]
 }
 
 class DecoupledInputMux[T <: Data](gen: T, numChans: Int) extends Module {
@@ -38,15 +36,20 @@ class DecoupledInputMux[T <: Data](gen: T, numChans: Int) extends Module {
   io.out.bits := io.in(io.sel).bits
   io.out.valid := io.in(io.sel).valid
 
-  for(i <- 0 until numChans) {
+  for (i <- 0 until numChans) {
     io.in(i).ready := io.out.ready & (io.sel === i.U)
   }
 }
 
 object DecoupledInputMux {
-  def apply[T <: Data](sel: UInt, chans: Seq[DecoupledIO[T]]): DecoupledIO[T] = {
-    val inst = Module(new DecoupledInputMux(chans(0).bits.cloneType, chans.size)).io
-    for(i <- 0 until chans.size) {inst.in(i) <> chans(i)}
+  def apply[T <: Data](
+      sel: UInt,
+      chans: Seq[DecoupledIO[T]]
+  ): DecoupledIO[T] = {
+    val inst = Module(
+      new DecoupledInputMux(chans(0).bits.cloneType, chans.size)
+    ).io
+    for (i <- 0 until chans.size) { inst.in(i) <> chans(i) }
     inst.sel := sel
     inst.out
   }

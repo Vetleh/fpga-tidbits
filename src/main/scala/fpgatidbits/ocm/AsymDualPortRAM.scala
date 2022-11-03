@@ -19,32 +19,37 @@ class AsymDualPortRAM(p: OCMParameters) extends Module {
   // according to this
   val minWidth = math.min(p.writeWidth, p.readWidth)
   val memBits = p.writeDepth * p.writeWidth
-  val mem = SyncReadMem(memBits/minWidth, UInt(minWidth.W))
+  val mem = SyncReadMem(memBits / minWidth, UInt(minWidth.W))
 
-  for(i <- 0 to 1) {  // for each memory port
+  for (i <- 0 to 1) { // for each memory port
     val base = io.ports(i).req.addr
     // logic depends on whether read or write width is smaller
-    if(p.readWidth > p.writeWidth) {
+    if (p.readWidth > p.writeWidth) {
       // big reads, small writes
       // address corresponds directly to write cell address
-      when (io.ports(i).req.writeEn) {
+      when(io.ports(i).req.writeEn) {
         mem(base) := io.ports(i).req.writeData
       }
       // reads need to concatenate multiple cells
       val wordsToRead = p.readWidth / p.writeWidth
-      val rdData = Cat((wordsToRead-1 to 0 by -1).map( {i: Int => mem(base+i.U)}))
+      val rdData = Cat((wordsToRead - 1 to 0 by -1).map({ i: Int =>
+        mem(base + i.U)
+      }))
       // use shift register to satisfy read latency requirement
-      io.ports(i).rsp.readData := ShiftRegister(n=p.readLatency, in=rdData)
+      io.ports(i).rsp.readData := ShiftRegister(rdData, p.readLatency)
     } else {
       // small reads, big writes
       // address corresponds directly to read cell address
       val rdData = mem(base)
-      io.ports(i).rsp.readData := ShiftRegister(n=p.readLatency, in=rdData)
+      io.ports(i).rsp.readData := ShiftRegister(rdData, p.readLatency)
       // need to write to multiple cells
       val wordsToWrite = p.writeWidth / p.readWidth
-      when (io.ports(i).req.writeEn) {
-        for(j <- 0 until wordsToWrite) {
-          mem(base+j.U) := io.ports(i).req.writeData((j+1)*minWidth-1, j*minWidth)
+      when(io.ports(i).req.writeEn) {
+        for (j <- 0 until wordsToWrite) {
+          mem(base + j.U) := io
+            .ports(i)
+            .req
+            .writeData((j + 1) * minWidth - 1, j * minWidth)
         }
       }
     }
@@ -52,7 +57,6 @@ class AsymDualPortRAM(p: OCMParameters) extends Module {
 }
 
 // TODO this test will only work on 8w/32r OCM and tests very little
-
 
 class AsymDualPortRAMTester(c: AsymDualPortRAM) extends PeekPokeTester(c) {
   val p = c.ocmParams

@@ -12,9 +12,10 @@ import fpgatidbits.ocm._
 
 class TestBRAM(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 0
-  val io = IO(new GenericAcceleratorIF(numMemPorts, p) {
+  class TestBRAMIO() extends GenericAcceleratorIF(numMemPorts, p) {
     val ports = Vec(2, new OCMSlaveIF(32, 32, 10))
-  })
+  }
+  val io = IO(new TestBRAMIO())
   io.signature := makeDefaultSignature()
 
   val memExt = Module(new DualPortBRAM(10, 32)).io

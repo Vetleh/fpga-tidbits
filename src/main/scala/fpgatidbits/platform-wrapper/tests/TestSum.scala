@@ -9,30 +9,35 @@ import fpgatidbits.streams._
 // read and sum a contiguous stream of 32-bit uints from main memory
 class TestSum(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 1
-  val io = IO(new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestSumIO extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
     val baseAddr = Input(UInt(64.W))
     val byteCount = Input(UInt(32.W))
     val sum = Output(UInt(32.W))
     val cycleCount = Output(UInt(32.W))
-  })
+  }
+  val io = IO(new TestSumIO())
+  // TODO I doubt this is an optimal solution, so should be fixed
   io.signature := makeDefaultSignature()
   plugMemWritePort(0)
 
   val rdP = new StreamReaderParams(
-    streamWidth = 32, fifoElems = 8, mem = p.toMemReqParams(),
-    maxBeats = 1, chanID = 0, disableThrottle = true
+    streamWidth = 32,
+    fifoElems = 8,
+    mem = p.toMemReqParams(),
+    maxBeats = 1,
+    chanID = 0,
+    disableThrottle = true
   )
 
-
   val reader = Module(new StreamReader(rdP)).io
-  val red = Module(new StreamReducer(32, 0, {_+_})).io
+  val red = Module(new StreamReducer(32, 0, { _ + _ })).io
 
   reader.start := io.start
   reader.baseAddr := io.baseAddr
   reader.byteCount := io.byteCount
-
 
   // Added by erlingrj because chisel3 complains they are not initialized
   //  when inspecting verilog output of chisel2 synthesis they are commented out of the
@@ -53,6 +58,8 @@ class TestSum(p: PlatformWrapperParams) extends GenericAccelerator(p) {
 
   val regCycleCount = RegInit(0.U(32.W))
   io.cycleCount := regCycleCount
-  when(!io.start) {regCycleCount := 0.U}
-  .elsewhen(io.start & !io.finished) {regCycleCount := regCycleCount + 1.U}
+  when(!io.start) { regCycleCount := 0.U }
+    .elsewhen(io.start & !io.finished) {
+      regCycleCount := regCycleCount + 1.U
+    }
 }

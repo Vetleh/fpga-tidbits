@@ -14,7 +14,8 @@ import fpgatidbits.streams._
 
 class TestMemLatency(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 1
-  val io = new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestMemLatency() extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
     val baseAddr = Input(UInt(64.W))
@@ -22,22 +23,27 @@ class TestMemLatency(p: PlatformWrapperParams) extends GenericAccelerator(p) {
     val sum = Output(UInt(32.W))
     val cycleCount = Output(UInt(32.W))
     // controls for ID pool reinit
-    val doInit = Input(Bool())                // pulse this to re-init ID pool
-    val initCount = Input(UInt(8.W))  // # IDs to initialize
+    val doInit = Input(Bool()) // pulse this to re-init ID pool
+    val initCount = Input(UInt(8.W)) // # IDs to initialize
   }
+
+  val io = IO(new TestMemLatency())
   io.signature := makeDefaultSignature()
   plugMemWritePort(0)
 
   val rdP = new StreamReaderParams(
-    streamWidth = 64, fifoElems = 8, mem = p.toMemReqParams(),
-    maxBeats = 8, chanID = 0,
+    streamWidth = 64,
+    fifoElems = 8,
+    mem = p.toMemReqParams(),
+    maxBeats = 8,
+    chanID = 0,
     disableThrottle = true, // outstanding reqs limits request rate
-    readOrderCache = true,  // enable read order cache
-    readOrderTxns = 16      // outstanding mem reqs. capped at 16
+    readOrderCache = true, // enable read order cache
+    readOrderTxns = 16 // outstanding mem reqs. capped at 16
   )
 
   val reader = Module(new StreamReader(rdP)).io
-  val red = Module(new StreamReducer(64, 0, {_+_})).io
+  val red = Module(new StreamReducer(64, 0, { _ + _ })).io
 
   reader.start := io.start
   reader.baseAddr := io.baseAddr
@@ -58,6 +64,8 @@ class TestMemLatency(p: PlatformWrapperParams) extends GenericAccelerator(p) {
 
   val regCycleCount = RegInit(0.U(32.W))
   io.cycleCount := regCycleCount
-  when(!io.start) {regCycleCount := 0.U}
-  .elsewhen(io.start & !io.finished) {regCycleCount := regCycleCount + 1.U}
+  when(!io.start) { regCycleCount := 0.U }
+    .elsewhen(io.start & !io.finished) {
+      regCycleCount := regCycleCount + 1.U
+    }
 }

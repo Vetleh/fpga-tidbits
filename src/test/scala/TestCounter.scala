@@ -1,7 +1,7 @@
 import chisel3._
 import chisel3.util._
 //import fpgatidbits.math.Counter
-import org.scalatest.junit.JUnitSuite
+// import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
 /*
@@ -56,4 +56,4 @@ class TestCounter extends JUnitSuite {
   }
 }
 
-*/
+ */

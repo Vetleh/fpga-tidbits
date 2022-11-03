@@ -27,11 +27,11 @@ class AXIStreamSlaveIF[T <: Data](gen: T) extends DecoupledIO(gen) {
 
   override def clone: this.type = { new AXIStreamSlaveIF(gen).asInstanceOf[this.type]; }
 }
-*/
-
+ */
 
 class AXIStreamIF[T <: Data](private val gen: T) extends Bundle {
-  val TREADY = Input(Bool())
-  val TVALID = Output(Bool())
-  val TDATA = Output(gen)
+  val ready = Input(Bool())
+  val valid = Output(Bool())
+  val bits = Output(gen)
 }
+

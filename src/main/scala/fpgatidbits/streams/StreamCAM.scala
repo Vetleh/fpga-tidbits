@@ -34,7 +34,6 @@ class StreamCAM(entries: Int, tag_bits: Int) extends Module {
   io.full := !cam.hasFree
 }
 
-
 // adapted from J. Bachrach's "Advanced Chisel" slides
 // interface & implementation for a combinational content-addressable memory
 
@@ -52,8 +51,6 @@ class CAMIO(entries: Int, addr_bits: Int, tag_bits: Int) extends Bundle {
   val hasFree = Output(Bool())
   val freeInd = Output(UInt(log2Ceil(entries).W))
 
-  override def cloneType: this.type =
-    new CAMIO(entries,addr_bits,tag_bits).asInstanceOf[this.type]
 }
 
 // TODO make the CAM search/match function customizable?
@@ -65,8 +62,10 @@ class CAM(entries: Int, tag_bits: Int) extends Module {
   // valid (fullness) of each slot in the CAM
   val vb_array = RegInit(0.U(entries.W))
   // hit status for clearing
-  //val clearHits = Vec((0 until entries).map(i => vb_array(i) && cam_tags(i) === io.clear_tag))
-  val clearHits = VecInit(Seq.tabulate(entries){i => vb_array(i) && cam_tags(i) === io.clear_tag})
+  // val clearHits = Vec((0 until entries).map(i => vb_array(i) && cam_tags(i) === io.clear_tag))
+  val clearHits = VecInit(Seq.tabulate(entries) { i =>
+    vb_array(i) && cam_tags(i) === io.clear_tag
+  })
   io.is_clear_hit := clearHits.asUInt.orR
 
   // index of first free slot in the CAM (least significant first)
@@ -77,13 +76,16 @@ class CAM(entries: Int, tag_bits: Int) extends Module {
 
   // produce masks to allow simultaneous write+clear
   val writeMask = Mux(io.write, UIntToOH(freeLocation), (0.U(entries.W)))
-  val clearMask = Mux(io.clear_hit, (~clearHits.asUInt).asUInt, (~0.U(entries.W)).asUInt)
+  val clearMask =
+    Mux(io.clear_hit, (~clearHits.asUInt).asUInt, (~0.U(entries.W)).asUInt)
 
   vb_array := ((vb_array | writeMask) & clearMask).asUInt
 
-  when (io.write) { cam_tags(freeLocation) := io.write_tag }
+  when(io.write) { cam_tags(freeLocation) := io.write_tag }
 
-  val hits = VecInit(Seq.tabulate(entries) { (i => vb_array(i) && cam_tags(i) === io.tag) })
+  val hits = VecInit(Seq.tabulate(entries) {
+    (i => vb_array(i) && cam_tags(i) === io.tag)
+  })
   io.valid_bits := vb_array
   io.hits := hits.asUInt
   io.hit := io.hits.orR

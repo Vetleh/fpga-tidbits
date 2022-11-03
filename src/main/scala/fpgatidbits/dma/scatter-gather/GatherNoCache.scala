@@ -8,13 +8,13 @@ import fpgatidbits.ocm._
 // system, without caching any data
 
 class GatherNoCache(
-  chanBaseID: Int,        // base channel ID for memory system
-  outstandingTxns: Int,   // number of outstanding memory transactions
-  forceInOrder: Boolean,  // use a ReadOrderCache to guarantee in-order resps
-  indWidth: Int,
-  datWidth: Int,
-  tagWidth: Int,
-  mrp: MemReqParams
+    chanBaseID: Int, // base channel ID for memory system
+    outstandingTxns: Int, // number of outstanding memory transactions
+    forceInOrder: Boolean, // use a ReadOrderCache to guarantee in-order resps
+    indWidth: Int,
+    datWidth: Int,
+    tagWidth: Int,
+    mrp: MemReqParams
 ) extends Module {
   val io = IO(new GatherIF(indWidth, datWidth, tagWidth, mrp) {
     // req - rsp interface for memory reads
@@ -27,20 +27,16 @@ class GatherNoCache(
   // define types for internal requests and responses:
   class InternalReq extends CloakroomBundle(outstandingTxns) {
     val ind = UInt(indWidth.W)
-    override def cloneType: this.type =
-      new InternalReq().asInstanceOf[this.type]
   }
   class InternalRsp extends CloakroomBundle(outstandingTxns) {
     val dat = UInt(datWidth.W)
-    override def cloneType: this.type =
-      new InternalRsp().asInstanceOf[this.type]
   }
   val ireq = new InternalReq()
   val irsp = new InternalRsp()
-  val bytesPerVal = (datWidth/8).U
+  val bytesPerVal = (datWidth / 8).U
 
   /* TODO IMPROVEMENT: add support for subword-sized gather*/
-  if(mrp.dataWidth != datWidth)
+  if (mrp.dataWidth != datWidth)
     throw new Exception("Subword gathers not yet supported in GatherNoCache")
 
   // ==========================================================================
@@ -58,10 +54,17 @@ class GatherNoCache(
     extOut
   }
 
-  val cloakroom = Module(new CloakroomLUTRAM(
-    num = outstandingTxns, genA = io.in.bits.cloneType, undress = undressFxn,
-    genC = irsp, dress = dressFxn, new InternalReq, new GatherRsp(datWidth, tagWidth)
-  )).io
+  val cloakroom = Module(
+    new CloakroomLUTRAM(
+      num = outstandingTxns,
+      genA = io.in.bits.cloneType,
+      undress = undressFxn,
+      genC = irsp,
+      dress = dressFxn,
+      new InternalReq,
+      new GatherRsp(datWidth, tagWidth)
+    )
+  ).io
 
   io.in <> cloakroom.extIn
   val readyReqs = FPGAQueue(cloakroom.intOut, 2)
@@ -72,24 +75,30 @@ class GatherNoCache(
 
   // ==========================================================================
   // instantiate read order cache, if desired
-  val roc = Module(new ReadOrderCache(new ReadOrderCacheParams(
-    mrp = mrp, maxBurst = 1, outstandingReqs = outstandingTxns,
-    chanIDBase = chanBaseID
-  ))).io
+  val roc = Module(
+    new ReadOrderCache(
+      new ReadOrderCacheParams(
+        mrp = mrp,
+        maxBurst = 1,
+        outstandingReqs = outstandingTxns,
+        chanIDBase = chanBaseID
+      )
+    )
+  ).io
   // mostly here as a Chisel bug workaround: in case the read order cache is
   // instantiated but not connected, the generated Verilog will have a syntax
   // error (due to the comma following the reset port, and nothing else coming
   // afterwards)
   roc.doInit := false.B
 
-  if(forceInOrder) {
+  if (forceInOrder) {
     roc.reqMem <> io.memRdReq
     io.memRdRsp <> roc.rspMem
   }
 
   // ==========================================================================
   // push ready-to-go requests to external memory
-  val memreq = if(forceInOrder) roc.reqOrdered else io.memRdReq
+  val memreq = if (forceInOrder) roc.reqOrdered else io.memRdReq
 
   memreq.valid := readyReqs.valid
   readyReqs.ready := memreq.ready
@@ -104,7 +113,7 @@ class GatherNoCache(
 
   // ==========================================================================
   // accept responses from external memory
-  val memrsp = if(forceInOrder) roc.rspOrdered else io.memRdRsp
+  val memrsp = if (forceInOrder) roc.rspOrdered else io.memRdRsp
 
   readyRsps.valid := memrsp.valid
   memrsp.ready := readyRsps.ready

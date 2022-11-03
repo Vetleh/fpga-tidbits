@@ -2,11 +2,9 @@ package fpgatidbits
 
 import chisel3._
 import chisel3.util._
-import chisel3.iotesters._
+import chisel3.stage.{ChiselStage, ChiselGeneratorAnnotation}
+
 import fpgatidbits.Testbenches._
-//import fpgatidbits.ocm._
-//import fpgatidbits.streams._
-//import fpgatidbits.SimUtils._
 import fpgatidbits.axi._
 import fpgatidbits.dma._
 import fpgatidbits.PlatformWrapper._
@@ -18,8 +16,7 @@ import java.nio.file.Paths
 
 // erlingrj: Seems as if you need this testbench to instantiate the dut
 // so we can emit verilator c++ code that simulates the dut
-class TesterEmitVerilator[T <: MultiIOModule](dut: T) extends iotesters.PeekPokeTester(dut) {}
-
+class TesterEmitVerilator[T <: Module](dut: T) {}
 
 object TidbitsMakeUtils {
   type AccelInstFxn = PlatformWrapperParams => GenericAccelerator
@@ -29,13 +26,6 @@ object TidbitsMakeUtils {
   val platformMap: PlatformMap = Map(
     "ZedBoard" -> {( f, targetDir ) => new ZedBoardWrapper(f, targetDir)},
     "PYNQZ1" -> {( f, targetDir )  => new PYNQZ1Wrapper(f, targetDir)},
- //   "PYNQU96" -> {f => new PYNQU96Wrapper(f)},
-  //  "PYNQU96CC" -> {f => new PYNQU96CCWrapper(f)},
-   // "PYNQZCU104" -> {f => new PYNQZCU104Wrapper(f)},
-    //"PYNQZCU104CC" -> {f => new PYNQZCU104CCWrapper(f)},
-    //"GenericSDAccel" -> {f => new GenericSDAccelWrapper(f)},
-    //"ZC706" -> {f => new ZC706Wrapper(f)},
-    //"WX690T" -> {f => new WolverinePlatformWrapper(f)},
     "VerilatedTester" -> {( f, targetDir )  => new VerilatedTesterWrapper(f, targetDir)},
     "Tester" -> {( f, targetDir )  => new TesterWrapper(f, targetDir)}
   )
@@ -44,18 +34,11 @@ object TidbitsMakeUtils {
   val fpgaPartMap = Map(
     "ZedBoard" -> "xc7z020clg400-1",
     "PYNQZ1" -> "xc7z020clg400-1",
-    //"PYNQU96" -> "xczu3eg-sbva484-1-i",
-    //"PYNQU96CC" -> "xczu3eg-sbva484-1-i",
-    //"PYNQZCU104" -> "xczu7ev-ffvc1156-2-e",
-    //"PYNQZCU104CC" -> "xczu7ev-ffvc1156-2-e",
-    //"ZC706" -> "xc7z045ffg900-2",
-    //"KU115" -> "xcku115-flvb2104-2-e",
     "VerilatedTester" -> "xczu3eg-sbva484-1-i" // use Ultra96 part for tester
-    //"VU9P" -> "xcvu9p-flgb2104-2-i"
   )
 
   def fileCopy(from: String, to: String) = {
-    s"cp -f $from $to" !
+    s"cp -f $from $to".!
   }
 
   def fileCopyBulk(fromDir: String, toDir: String, fileNames: Seq[String]) = {
@@ -64,35 +47,35 @@ object TidbitsMakeUtils {
   }
 
   /*
-  def makeEmulatorLibrary(accInst: AccelInstFxn, outDir: String, gOpts: Seq[String] = Seq(), chiselOpts: Seq[String] = Seq()) = {
-    val fullDir = s"realpath $outDir".!!.filter(_ >= ' ')
-    val platformInst = platformMap("Tester")
-    val drvDir = getClass.getResource("/cpp/platform-wrapper-regdriver").getPath
-    val chiselArgs = Array("--backend","c","--targetDir", fullDir) ++ chiselOpts
+    def makeEmulatorLibrary(accInst: AccelInstFxn, outDir: String, gOpts: Seq[String] = Seq(), chiselOpts: Seq[String] = Seq()) = {
+      val fullDir = s"realpath $outDir".!!.filter(_ >= ' ')
+      val platformInst = platformMap("Tester")
+      val drvDir = getClass.getResource("/cpp/platform-wrapper-regdriver").getPath
+      val chiselArgs = Array("--backend","c","--targetDir", fullDir) ++ chiselOpts
+      //chiselMain(chiselArgs, () => Module(platformInst(accInst)))
+      chisel3.Driver.execute(chiselArgs, () => Module(platformInst(accInst, )))
+      val p = platformInst(accInst)
+      // build reg driver
+      p.generateRegDriver(s"$fullDir")
+      // copy emulator driver and SW support files
+      fileCopyBulk(drvDir, fullDir, p.platformDriverFiles)
+      val drvFiles = p.platformDriverFiles.map(x => fullDir+"/"+x)
+      // get only the cpp files
+      val regex = "(.*\\.cpp)"
+      val cppDrvFiles = drvFiles.filter(x => x matches regex)
+      // call g++ to produce a shared library
+      println("Compiling hardware emulator as library...")
+      val gc = Seq(
+        "g++", "-shared", "-fPIC", "-o", s"$fullDir/driver.a"
+      ) ++ gOpts ++ cppDrvFiles ++ Seq(outDir+"/TesterWrapper.cpp")
+      println(gc.mkString(" "))
+      val gcret = gc.!!
+      println(gcret)
+      println(s"Hardware emulator library built as $fullDir/driver.a")
+    }
+  */
 
-    //chiselMain(chiselArgs, () => Module(platformInst(accInst)))
-    chisel3.Driver.execute(chiselArgs, () => Module(platformInst(accInst, )))
 
-    val p = platformInst(accInst)
-    // build reg driver
-    p.generateRegDriver(s"$fullDir")
-    // copy emulator driver and SW support files
-    fileCopyBulk(drvDir, fullDir, p.platformDriverFiles)
-    val drvFiles = p.platformDriverFiles.map(x => fullDir+"/"+x)
-    // get only the cpp files
-    val regex = "(.*\\.cpp)"
-    val cppDrvFiles = drvFiles.filter(x => x matches regex)
-    // call g++ to produce a shared library
-    println("Compiling hardware emulator as library...")
-    val gc = Seq(
-      "g++", "-shared", "-fPIC", "-o", s"$fullDir/driver.a"
-    ) ++ gOpts ++ cppDrvFiles ++ Seq(outDir+"/TesterWrapper.cpp")
-    println(gc.mkString(" "))
-    val gcret = gc.!!
-    println(gcret)
-    println(s"Hardware emulator library built as $fullDir/driver.a")
-  }
-*/
   def makeDriverLibrary(p: PlatformWrapper, outDir: String) = {
     val fullDir = s"realpath $outDir".!!.filter(_ >= ' ')
     val drvDir = getClass.getResource("/cpp/platform-wrapper-regdriver").getPath
@@ -110,23 +93,32 @@ object TidbitsMakeUtils {
   }
 
   def makeVerilator(accInst: AccelInstFxn, destDir: String) = {
-    val tidbitsDir = Paths.get(".").toAbsolutePath
+    val tidbitsDir = Paths.get("").toAbsolutePath.toString()
+    println(tidbitsDir)
 
     val platformInst = {f => new VerilatedTesterWrapper(f, tidbitsDir + "/verilator/")}
-    val chiselArgs = Array("--backend","v","--targetDir", s"$destDir")
+    // val chiselArgs = Array("v","--outputDirectory", s"$destDir")
+    val chiselArgs = Array("v", s"$destDir")
     // generate verilog for the accelerator
-    //chiselMain(chiselArgs, () => Module(platformInst(accInst)))
-    chisel3.Driver.execute(chiselArgs, () => Module(platformInst(accInst)))
+    //chisel3.Driver.execute(chiselArgs, () => Module(platformInst(accInst)))
+    println("Chiselstage before")
+    (new ChiselStage).execute(
+      chiselArgs,
+      Seq(ChiselGeneratorAnnotation(() => platformInst(accInst)))
+    )
+    println("Chiselstage after")
     val verilogBlackBoxFiles = Seq("Q_srl.v", "DualPortBRAM.v")
     val scriptFiles = Seq("verilator-build.sh")
     val driverFiles = Seq("wrapperregdriver.h", "platform-verilatedtester.cpp",
       "platform.h", "verilatedtesterdriver.hpp")
+    val emuFiles = Seq("EmuTestExecStage.hpp", "EmuTestFetchStage.hpp", "EmuTestResultStage.hpp")
 
     // copy blackbox verilog, scripts, driver and SW support files
-    fileCopyBulk(s"$tidbitsDir/verilog/", destDir, verilogBlackBoxFiles)
-    fileCopyBulk(s"$tidbitsDir/script/", destDir, scriptFiles)
-    fileCopyBulk(s"$tidbitsDir/cpp/platform-wrapper-regdriver/", destDir,
-      driverFiles)
+    println(s"Dest dir: $destDir, tidbitsDir: $tidbitsDir")
+    fileCopyBulk(s"$tidbitsDir/verilator", destDir, verilogBlackBoxFiles)
+    fileCopyBulk(s"$tidbitsDir/verilator", destDir, scriptFiles)
+    fileCopyBulk(s"$tidbitsDir/verilator", destDir, driverFiles)
+    fileCopyBulk(s"$tidbitsDir/verilator", destDir, emuFiles)
     // build driver
     //platformInst(accInst).generateRegDriver(destDir)
   }
@@ -149,7 +141,6 @@ object TidbitsMakeUtils {
   ) = {
     // make an instance of the accelerator using the given function
     val acc = accInst(TesterWrapperParams)
-
     println("Generating HLS dependencies...")
     // generate HLS for each registered HLSBlackBox dependency
     for(hls_bb <- acc.hlsBlackBoxes) {
@@ -201,8 +192,14 @@ object MainObj {
   }
 
   def fileCopyBulk(fromDir: String, toDir: String, fileNames: Seq[String]) = {
-    for(f <- fileNames)
-      fileCopy(fromDir + f, toDir + f)
+    println(s"copy from ${fromDir} to ${toDir}")
+    for(f <- fileNames) {
+      if (f(0).toString != "/" && toDir.last.toString != "/") {
+        fileCopy(fromDir + f, toDir + "/" + f)
+      } else {
+        fileCopy(fromDir + f, toDir + f)
+      }
+    }
   }
 
   def directoryDelete(dir: String): Unit = {
@@ -218,12 +215,15 @@ object MainObj {
     println(targetDir)
     val chiselArgs = Array("")
 
-    chisel3.Driver.execute(chiselArgs, () => platformInst(accInst, targetDir))
+    (new ChiselStage).execute(
+      chiselArgs,
+      Seq(ChiselGeneratorAnnotation(() => Module(platformInst(accInst, targetDir))))
+    )
 
     // Copy test application
-    val resRoot = Paths.get("./src/main/resources").toAbsolutePath
-    val testRoot = s"$resRoot/cpp/platform-wrapper-tests/"
-    fileCopy(testRoot + accelName  + ".cpp", s"${targetDir}/main.cpp")
+//    val resRoot = Paths.get("./src/main/resources").toAbsolutePath
+//    val testRoot = s"$resRoot/cpp/platform-wrapper-tests/"
+//    fileCopy(testRoot + accelName  + ".cpp", s"${targetDir}/main.cpp")
 
   }
 
@@ -237,7 +237,10 @@ object MainObj {
     val chiselArgs = Array("--target-dir", targetDir)
 
     // generate verilog for the accelerator and create the regfile driver
-    chisel3.Driver.execute(chiselArgs, () => platformInst(accInst))
+    (new ChiselStage).execute(
+      chiselArgs,
+      Seq(ChiselGeneratorAnnotation(() => Module(platformInst(accInst))))
+    )
 
     // copy test application
     val resRoot = Paths.get("./src/main/resources").toAbsolutePath
@@ -255,7 +258,10 @@ object MainObj {
     val chiselArgs = Array("--target-dir", targetDir)
 
     // generate verilog for the accelerator and create the regfile driver
-    chisel3.Driver.execute(chiselArgs, () => platformInst(accInst))
+    (new ChiselStage).execute(
+      chiselArgs,
+      Seq(ChiselGeneratorAnnotation(() => Module(platformInst(accInst))))
+    )
 
     // copy test application
     val resRoot = Paths.get("./src/main/resources").toAbsolutePath

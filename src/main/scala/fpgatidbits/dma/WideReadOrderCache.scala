@@ -29,13 +29,17 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
   val rid = 0.U(p.mrp.idWidth.W)
   val mreq = new GenericMemoryRequest(p.mrp)
   // build a clonetype for the wide memory rsps
-  val modMRP = new MemReqParams(p.mrp.addrWidth, burstBits, p.mrp.idWidth,
-  p.mrp.metaDataWidth, p.mrp.sameIDInOrder)
+  val modMRP = new MemReqParams(
+    p.mrp.addrWidth,
+    burstBits,
+    p.mrp.idWidth,
+    p.mrp.metaDataWidth,
+    p.mrp.sameIDInOrder
+  )
   val mrsp = new GenericMemoryResponse(modMRP)
 
   // queue with pool of available request IDs
-  val freeReqID = Module(new ReqIDQueue(
-    p.mrp.idWidth, p.outstandingReqs, 0)).io
+  val freeReqID = Module(new ReqIDQueue(p.mrp.idWidth, p.outstandingReqs, 0)).io
 
   // queue with issued requests
   val busyReqs = Module(new FPGAQueue(mreq, p.outstandingReqs)).io
@@ -45,19 +49,30 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
 
   // issue new requests: sync freeReqID and incoming reqs
   val readyReqs = StreamJoin(
-    inA = freeReqID.idOut, inB = io.reqOrdered, genO = mreq,
-    join = {(freeID: UInt, r: UInt) => GenericMemoryRequest(
-      p = p.mrp, addr = r, write = false.B, id = freeID,
-      numBytes = (burstBytes).U
-    )}
+    inA = freeReqID.idOut,
+    inB = io.reqOrdered,
+    genO = mreq,
+    join = { (freeID: UInt, r: UInt) =>
+      GenericMemoryRequest(
+        p = p.mrp,
+        addr = r,
+        write = false.B,
+        id = freeID,
+        numBytes = (burstBytes).U
+      )
+    }
   )
 
   // issued requests go to both mem req channel and busyReqs queue
-  val reqIssueFork = Module(new StreamFork(
-    genIn = mreq, genA = mreq, genB = mreq,
-    forkA = {x: GenericMemoryRequest => x},
-    forkB = {x: GenericMemoryRequest => x}
-  )).io
+  val reqIssueFork = Module(
+    new StreamFork(
+      genIn = mreq,
+      genA = mreq,
+      genB = mreq,
+      forkA = { x: GenericMemoryRequest => x },
+      forkB = { x: GenericMemoryRequest => x }
+    )
+  ).io
 
   readyReqs <> reqIssueFork.in
   reqIssueFork.outA <> io.reqMem
@@ -65,7 +80,7 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
 
   io.reqMem.bits.channelID := p.chanIDBase.U + reqIssueFork.outA.bits.channelID
 
-  //==========================================================================
+  // ==========================================================================
 
   val ctrBits = log2Up(p.maxBurst)
   val reqIDBits = log2Up(p.outstandingReqs)
@@ -92,9 +107,11 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
   val regCtrInd = RegNext(ctrRdInd)
   val regCtrValid = RegNext(io.rspMem.valid)
   val regCtrData = RegNext(io.rspMem.bits.readData)
-  val regCtrLast = RegNext( io.rspMem.bits.isLast)
+  val regCtrLast = RegNext(io.rspMem.bits.isLast)
   // bypass logic to compensate for BRAM latency
-  val regDoBypass = RegNext( ctrWr.req.writeEn & (ctrRd.req.addr === ctrWr.req.addr))
+  val regDoBypass = RegNext(
+    ctrWr.req.writeEn & (ctrRd.req.addr === ctrWr.req.addr)
+  )
   val regNewVal = RegInit(0.U(ctrBits.W))
   val ctrOldVal = Mux(regDoBypass, regNewVal, ctrRd.rsp.readData)
   // use regCtrLast to clear counter at end of burst
@@ -106,13 +123,16 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
 
   /* TODO IMPROVE potentially long comb path, can hurt frequency --
       can add registers prior to data store BRAM to improve
-  */
+   */
   // store received data in bank-writable BRAM, each bank is as wide as the
   // mem data bus
-  val storage = Module(new DualPortMaskedBRAM(
-    addrBits = log2Up(p.outstandingReqs), dataBits = burstBits,
-    unit = p.mrp.dataWidth
-  )).io
+  val storage = Module(
+    new DualPortMaskedBRAM(
+      addrBits = log2Up(p.outstandingReqs),
+      dataBits = burstBits,
+      unit = p.mrp.dataWidth
+    )
+  ).io
   val dataRd = storage.ports(0)
   val dataWr = storage.ports(1)
   dataRd.req.writeEn := false.B
@@ -124,7 +144,7 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
   // variable leftshift according to ctrOldVal
   dataWr.req.writeData := regCtrData << (ctrOldVal * (p.mrp.dataWidth).U)
   // compute a one-hot write mask with the correct word
-  for(i <- 0 until p.maxBurst) {
+  for (i <- 0 until p.maxBurst) {
     dataWr.req.writeMask(i) := (ctrOldVal === i.U)
   }
 
@@ -133,7 +153,7 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
   val burstFinishedSet = UInt(p.outstandingReqs.W)
   burstFinishedSet := 0.U(p.outstandingReqs.W)
   val burstFinishedClr = UInt(p.outstandingReqs.W)
-  burstFinishedClr := 0.U(p.outstandingReqs)
+  burstFinishedClr := 0.U(p.outstandingReqs.W)
   regBurstFinished := (regBurstFinished & (~burstFinishedClr).asUInt) | burstFinishedSet
 
   // set finished flag on last beat received
@@ -157,7 +177,7 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
 
   headRsps.enq.valid := RegNext(doPopRsp)
   headRsps.enq.bits.readData := dataRd.rsp.readData
-  headRsps.enq.bits.channelID := RegNext(headReqID)  // internal ID
+  headRsps.enq.bits.channelID := RegNext(headReqID) // internal ID
   freeReqID.idIn.bits := headReqID
   busyReqs.deq.ready := false.B
   freeReqID.idIn.valid := false.B
@@ -174,30 +194,36 @@ class WideReadOrderCache(p: ReadOrderCacheParams) extends Module {
 
   // =========================================================================
   // debug
-  //StreamMonitor(io.reqOrdered, true.B, "reqOrdered", true)
-  //StreamMonitor(io.rspOrdered, true.B, "rspOrdered", true)
-  //PrintableBundleStreamMonitor(io.reqMem, true.B, "memRdReq", true)
-  //PrintableBundleStreamMonitor(io.rspMem, true.B, "memRdRsp", true)
+  // StreamMonitor(io.reqOrdered, true.B, "reqOrdered", true)
+  // StreamMonitor(io.rspOrdered, true.B, "rspOrdered", true)
+  // PrintableBundleStreamMonitor(io.reqMem, true.B, "memRdReq", true)
+  // PrintableBundleStreamMonitor(io.rspMem, true.B, "memRdRsp", true)
 }
-
 
 // an alternative to WideReadOrderCache: upsize an incoming burst using a
 // shift register (StreamUpsizer)
 class BurstUpsizer(mIn: MemReqParams, wOut: Int) extends Module {
   val mOut = new MemReqParams(
-    mIn.addrWidth, wOut, mIn.dataWidth, mIn.metaDataWidth, mIn.sameIDInOrder
+    mIn.addrWidth,
+    wOut,
+    mIn.dataWidth,
+    mIn.metaDataWidth,
+    mIn.sameIDInOrder
   )
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new GenericMemoryResponse(mIn)))
     val out = Decoupled(new GenericMemoryResponse(mOut))
   })
   val wIn = mIn.dataWidth
-  if(wOut % wIn != 0) throw new Exception("Cannot upsize from unaligned size")
+  if (wOut % wIn != 0) throw new Exception("Cannot upsize from unaligned size")
 
   // copy all fields by default
   io.out.bits := io.in.bits
   // upsize the read data if needed
-  var upsized = if(wOut > mIn.dataWidth) StreamUpsizer(ReadRespFilter(io.in), wOut, Decoupled(UInt())) else ReadRespFilter(io.in)
+  var upsized =
+    if (wOut > mIn.dataWidth)
+      StreamUpsizer(ReadRespFilter(io.in), wOut, Decoupled(UInt()))
+    else ReadRespFilter(io.in)
 
   // use the upsized read data stream to drive output readData and handshake
   io.out.valid := upsized.valid

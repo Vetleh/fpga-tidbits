@@ -61,47 +61,47 @@ class PISOTester(c: ParallelInSerialOut) extends Tester(c) {
 
 object StreamDownsizer {
   def apply(in: AXIStreamIF[UInt], outW: Int, outGen: AXIStreamIF[UInt] ): AXIStreamIF[UInt] = {
-    val ds = Module(new AXIStreamDownsizer(in.TDATA.getWidth, outW))
+    val ds = Module(new AXIStreamDownsizer(in.bits.getWidth, outW))
     ds.in <> in
     ds.out
   }
 
   def apply(in: DecoupledIO[UInt], outW: Int, outGen: DecoupledIO[UInt]): DecoupledIO[UInt] = {
     val ds = Module(new AXIStreamDownsizer(in.bits.getWidth, outW))
-    ds.in.TDATA := in.bits
-    ds.in.TVALID := in.valid
-    in.ready := ds.in.TREADY
+    ds.in.bits := in.bits
+    ds.in.valid := in.valid
+    in.ready := ds.in.ready
 
     val decoupled_out = Wire(Decoupled(UInt(outW.W)))
-    ds.out.TREADY := decoupled_out.ready
-    decoupled_out.bits := ds.out.TDATA
-    decoupled_out.valid := ds.out.TVALID
+    ds.out.ready := decoupled_out.ready
+    decoupled_out.bits := ds.out.bits
+    decoupled_out.valid := ds.out.valid
 
     decoupled_out
   }
 
   def apply(in: AXIStreamIF[UInt], outW: Int, outGen: DecoupledIO[UInt]): DecoupledIO[UInt] = {
-    val ds = Module(new AXIStreamDownsizer(in.TDATA.getWidth, outW))
+    val ds = Module(new AXIStreamDownsizer(in.bits.getWidth, outW))
     ds.in <> in
 
     val decoupled_out = Decoupled(UInt(outW.W))
-    ds.out.TREADY := decoupled_out.ready
-    decoupled_out.bits := ds.out.TDATA
-    decoupled_out.valid := ds.out.TVALID
+    ds.out.ready := decoupled_out.ready
+    decoupled_out.bits := ds.out.bits
+    decoupled_out.valid := ds.out.valid
 
     decoupled_out
   }
 
   def apply(in: DecoupledIO[UInt], outW: Int, outGen: AXIStreamIF[UInt]): AXIStreamIF[UInt] = {
     val ds = Module(new AXIStreamDownsizer(in.bits.getWidth, outW))
-    ds.in.TDATA := in.bits
-    ds.in.TVALID := in.valid
-    in.ready := ds.in.TREADY
+    ds.in.bits := in.bits
+    ds.in.valid := in.valid
+    in.ready := ds.in.ready
     ds.out
   }
 }
 
-class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends MultiIOModule {
+class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends Module {
   val numShiftSteps = inWidth/outWidth
 
 
@@ -111,9 +111,9 @@ class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends MultiIOModule {
 
   // the shift register
   val shiftReg = Module(new ParallelInSerialOut(inWidth, outWidth))
-  shiftReg.io.parIn := in.TDATA
+  shiftReg.io.parIn := in.bits
   shiftReg.io.serIn := 0.U
-  out.TDATA := (shiftReg.io.serOut)
+  out.bits := (shiftReg.io.serOut)
   shiftReg.io.parWrEn := false.B
   shiftReg.io.shiftEn := false.B
 
@@ -123,8 +123,8 @@ class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends MultiIOModule {
   val regShiftCount = RegInit(0.U(log2Ceil(numShiftSteps).W))
 
   // default outputs
-  in.TREADY := false.B
-  out.TVALID := false.B
+  in.ready := false.B
+  out.valid := false.B
 
   // state machine
   switch( regState ) {
@@ -132,18 +132,18 @@ class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends MultiIOModule {
       // enable parallel load to shift register
       shiftReg.io.parWrEn := true.B
       // signal to input that we are ready to go
-      in.TREADY := true.B
+      in.ready := true.B
       // reset the count register
       regShiftCount := 0.U
       // wait until data is available at the input
-      when ( in.TVALID ) { regState := sShift }
+      when ( in.valid ) { regState := sShift }
     }
 
     is( sShift ) {
       // signal to output that data is available
-      out.TVALID := true.B
+      out.valid := true.B
       // wait for ack from output
-      when (out.TREADY) {
+      when (out.ready) {
         // increment shift counter
         regShiftCount := regShiftCount + 1.U
         // enable shift
@@ -157,14 +157,14 @@ class AXIStreamDownsizer(inWidth: Int, outWidth: Int) extends MultiIOModule {
 
     is( sLastStep ) {
       // signal to output that data is available
-      out.TVALID := true.B
+      out.valid := true.B
       // wait for ack from output
-      when (out.TREADY) {
+      when (out.ready) {
         // next action depends on both the in and out sides
-        when ( in.TVALID ) {
+        when ( in.valid ) {
           // new data already available on input, grab it
           shiftReg.io.parWrEn := true.B
-          in.TREADY := true.B
+          in.ready := true.B
           // reset counter and go to shift state
           regShiftCount := 0.U
           regState := sShift

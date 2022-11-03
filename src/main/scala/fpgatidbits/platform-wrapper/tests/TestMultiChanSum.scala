@@ -10,28 +10,39 @@ import fpgatidbits.streams._
 class TestMultiChanSum(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 1
   val numChans = 2
-  val io = IO(new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestMultiChanSumIO() extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
-    val baseAddr = Vec(numChans,Input(UInt(64.W)))
+    val baseAddr = Vec(numChans, Input(UInt(64.W)))
     val byteCount = Vec(numChans, Input(UInt(32.W)))
-    val sum = Vec(numChans,  Output(UInt(32.W)))
+    val sum = Vec(numChans, Output(UInt(32.W)))
     val status = Output(Bool())
-  })
+  }
+  val io = IO(new TestMultiChanSumIO())
+
   plugMemWritePort(0) // write ports not used
   io.signature := makeDefaultSignature()
   val mrp = p.toMemReqParams()
 
   def makeReader(id: Int) = {
-    Module(new StreamReader(new StreamReaderParams(
-      streamWidth = 32, fifoElems = 8, mem = mrp,
-      maxBeats = 1, chanID = id, disableThrottle = true
-    ))).io
+    Module(
+      new StreamReader(
+        new StreamReaderParams(
+          streamWidth = 32,
+          fifoElems = 8,
+          mem = mrp,
+          maxBeats = 1,
+          chanID = id,
+          disableThrottle = true
+        )
+      )
+    ).io
   }
 
-  //VecInit(Seq.tabulate(p.numMemPorts) {idx => IO(new AXIExternalIF(p.memAddrBits, p.memDataBits, p.memIDBits)).suggestName(s"mem${idx}")})
-  val readers = VecInit(Seq.tabulate(numChans) {i:Int => makeReader(i)})
+  // VecInit(Seq.tabulate(p.numMemPorts) {idx => IO(new AXIExternalIF(p.memAddrBits, p.memDataBits, p.memIDBits)).suggestName(s"mem${idx}")})
+  val readers = VecInit(Seq.tabulate(numChans) { i: Int => makeReader(i) })
   val reducers = VecInit(Seq.fill(numChans) {
-    Module(new StreamReducer(32, 0, {_+_})).io
+    Module(new StreamReducer(32, 0, { _ + _ })).io
   })
 
   val intl = Module(new ReqInterleaver(numChans, mrp)).io
@@ -39,7 +50,7 @@ class TestMultiChanSum(p: PlatformWrapperParams) extends GenericAccelerator(p) {
 
   // regGen -> intl -> (memRdReq) -> (memRdRsp) -> deintl -> reducer
 
-  for(i <- 0 until numChans) {
+  for (i <- 0 until numChans) {
     readers(i).start := io.start
     readers(i).baseAddr := io.baseAddr(i)
     readers(i).byteCount := io.byteCount(i)
@@ -49,7 +60,7 @@ class TestMultiChanSum(p: PlatformWrapperParams) extends GenericAccelerator(p) {
 
     readers(i).req <> intl.reqIn(i)
     deintl.rspOut(i) <> readers(i).rsp
-    readers(i).out.ready :=  reducers(i).streamIn.ready
+    readers(i).out.ready := reducers(i).streamIn.ready
     reducers(i).streamIn.valid := readers(i).out.valid
     reducers(i).streamIn.bits := readers(i).out.bits
 

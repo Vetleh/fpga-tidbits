@@ -1,6 +1,6 @@
 import chisel3._
 import chisel3.util._
-import org.scalatest.junit.JUnitSuite
+// import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import fpgatidbits.streams._
 
@@ -94,4 +94,4 @@ class TestAffineLoopNestIndGen extends JUnitSuite {
     }
   }
 }
-*/
+ */

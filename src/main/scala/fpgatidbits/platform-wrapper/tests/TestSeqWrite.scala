@@ -8,7 +8,8 @@ import fpgatidbits.streams._
 
 class TestSeqWrite(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 1
-  val io = new GenericAcceleratorIF(numMemPorts, p) {
+
+  class TestSeqWrite() extends GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
     val baseAddr = Input(UInt(64.W))
@@ -16,16 +17,23 @@ class TestSeqWrite(p: PlatformWrapperParams) extends GenericAccelerator(p) {
     val step = Input(UInt(32.W))
     val count = Input(UInt(32.W))
   }
-  plugMemReadPort(0)  // read port not used
+  val io = IO(new TestSeqWrite())
+  plugMemReadPort(0) // read port not used
   io.signature := makeDefaultSignature()
 
-  val sw = Module(new StreamWriter(new StreamWriterParams(
-    streamWidth = p.memDataBits, mem = p.toMemReqParams(), chanID = 0
-  ))).io
+  val sw = Module(
+    new StreamWriter(
+      new StreamWriterParams(
+        streamWidth = p.memDataBits,
+        mem = p.toMemReqParams(),
+        chanID = 0
+      )
+    )
+  ).io
 
   sw.start := io.start
   sw.baseAddr := io.baseAddr
-  sw.byteCount := io.count * (p.memDataBits/8).U
+  sw.byteCount := io.count * (p.memDataBits / 8).U
   io.finished := sw.finished
 
   val sg = Module(new SequenceGenerator(p.memDataBits)).io

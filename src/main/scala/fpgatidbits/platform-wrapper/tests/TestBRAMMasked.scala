@@ -18,10 +18,12 @@ class TestBRAMMasked(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val dataWidth = 32
   val addrWidth = 10
   val maskUnit = 8
-  val maskWidth = dataWidth/maskUnit
-  val io = IO(new GenericAcceleratorIF(numMemPorts, p) {
+  val maskWidth = dataWidth / maskUnit
+
+  class TestBRAMMaskedIO() extends GenericAcceleratorIF(numMemPorts, p) {
     val ports = Vec(2, new OCMMaskedSlaveIF(dataWidth, addrWidth, maskWidth))
-  })
+  }
+  val io = IO(new TestBRAMMaskedIO())
   io.signature := makeDefaultSignature()
 
   val mem = Module(new DualPortMaskedBRAM(addrWidth, dataWidth)).io
