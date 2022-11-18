@@ -17,25 +17,25 @@ class Q_srl(depthElems: Int, widthBits: Int)
     val count = Output(UInt(log2Ceil(depthElems + 1).W))
     val clock = Input(Clock())
     val reset = Input(Reset())
+    /*
+    val iValid = Input(Bool()).suggestName("i_v")
+    val iData = Input(UInt(widthBits.W)).suggestName("i_d")
+    val iBackPressure = Output(Bool()).suggestName("i_b")
+    val oValid = Output(Bool()).suggestName("o_v")
+    val oData = Output(UInt(widthBits.W)).suggestName("o_d")
+    val oBackPressure = Input(Bool()).suggestName("o_b")
+    val count = Output(UInt(log2Ceil(depthElems+1).W)).suggestName("count")
+    val clock = Input(Clock())
+    val reset = Input(Reset())
 
-    // val iValid = Input(Bool()).suggestName("i_v")
-    // val iData = Input(UInt(widthBits.W)).suggestName("i_d")
-    // val iBackPressure = Output(Bool()).suggestName("i_b")
-    // val oValid = Output(Bool()).suggestName("o_v")
-    // val oData = Output(UInt(widthBits.W)).suggestName("o_d")
-    // val oBackPressure = Input(Bool()).suggestName("o_b")
-    // val count = Output(UInt(log2Ceil(depthElems+1).W)).suggestName("count")
-    // val clock = Input(Clock())
-    // val reset = Input(Reset())
-
-    // i_v.suggestName("i_v")
-    // i_d.suggestName("i_d")
-    // i_b.suggestName("i_b")
-    // o_v.suggestName("o_v")
-    // o_d.suggestName("o_d")
-    // o_b.suggestName("o_b")
-    // count.suggestName("count")
-
+    i_v.suggestName("i_v")
+    i_d.suggestName("i_d")
+    i_b.suggestName("i_b")
+    o_v.suggestName("o_v")
+    o_d.suggestName("o_d")
+    o_b.suggestName("o_b")
+    count.suggestName("count")
+     */
   })
 
   // the clock/reset does not get added to the BlackBox interface by default
@@ -46,8 +46,7 @@ class Q_srl(depthElems: Int, widthBits: Int)
 
   // TODO add a proper simulation model -- for now we just instantiate a
   // regular Chisel Queue as mock SRL queue "behavioral model"
-
-  val mockQ = Module(new Queue(UInt(), depthElems))
+  val mockQ = Module(new Queue(UInt(widthBits.W), depthElems))
   io.count := mockQ.io.count
   mockQ.io.enq.valid := io.i_v
   mockQ.io.enq.bits := io.i_d
@@ -136,8 +135,7 @@ class BRAMQueue[T <: Data](gen: T, val entries: Int) extends Module {
   io.enq.ready := !full
 
   // pf.enq.valid := Reg(init = false.B, next = do_deq)
-  pf.enq.valid := RegInit(false.B)
-  pf.enq.valid := do_deq
+  pf.enq.valid := RegNext(do_deq, false.B)
   pf.enq.bits := readPort.rsp.readData.asTypeOf(pf.enq.bits)
 
   pf.deq <> io.deq

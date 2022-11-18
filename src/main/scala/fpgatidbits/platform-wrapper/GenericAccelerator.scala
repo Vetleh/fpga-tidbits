@@ -10,9 +10,11 @@ import scala.collection.mutable.ArrayBuffer
 // parameters for PlatformWrapper?
 
 // interface definition for GenericAccelerator-derived modules
-class GenericAcceleratorIF(numMemPorts: Int, p: PlatformWrapperParams) extends Bundle {
+class GenericAcceleratorIF(numMemPorts: Int, p: PlatformWrapperParams)
+    extends Bundle {
   // memory ports
-  val memPort = Vec(numMemPorts,new GenericMemoryMasterPort(p.toMemReqParams()))
+  val memPort =
+    Vec(numMemPorts, new GenericMemoryMasterPort(p.toMemReqParams()))
   // use the signature field for sanity and version checks
   val signature = Output(UInt(p.csrDataBits.W))
 }
@@ -30,12 +32,11 @@ abstract class GenericAccelerator(val p: PlatformWrapperParams) extends Module {
     hlsBlackBoxes += blackBox
     return blackBox
   }
-  */
-
+   */
 
   def hexcrc32(s: String): String = {
     import java.util.zip.CRC32
-    val crc=new CRC32
+    val crc = new CRC32
     crc.update(s.getBytes)
     crc.getValue.toHexString
   }
@@ -48,7 +49,7 @@ abstract class GenericAccelerator(val p: PlatformWrapperParams) extends Module {
     val dateString = dateFormat.format(date);*/
     // removing date from signature due to discrepancies that this causes
     // when HW and driver are generated on different days
-    val fullSignature = this.getClass.getSimpleName/* + "-" + dateString*/
+    val fullSignature = this.getClass.getSimpleName /* + "-" + dateString*/
     return hexcrc32(fullSignature)
   }
 
@@ -57,13 +58,13 @@ abstract class GenericAccelerator(val p: PlatformWrapperParams) extends Module {
   }
 
   // drive default values for memory read port i
-  def plugMemReadPort(i: Int) {
+  def plugMemReadPort(i: Int): Unit = {
     io.memPort(i).memRdReq.valid := false.B
     io.memPort(i).memRdReq.bits.driveDefaults()
     io.memPort(i).memRdRsp.ready := false.B
   }
   // drive default values for memory write port i
-  def plugMemWritePort(i: Int) {
+  def plugMemWritePort(i: Int): Unit = {
     io.memPort(i).memWrReq.valid := false.B
     io.memPort(i).memWrReq.bits.driveDefaults()
     io.memPort(i).memWrDat.valid := false.B

@@ -32,17 +32,6 @@ class DualPortBRAMExternalIO(addrBits: Int, dataBits: Int) extends Bundle {
 
  class DualPortBRAMIO(addrBits: Int, dataBits: Int) extends Bundle {
    val ports = Vec(2, new OCMSlaveIF(dataBits, dataBits, addrBits))
-  
-
-   ports(0).req.addr.suggestName("a_addr")
-   ports(0).req.writeData.suggestName("a_din")
-   ports(0).req.writeEn.suggestName("a_wr")
-   ports(0).rsp.readData.suggestName("a_dout")
-
-   ports(1).req.addr.suggestName("b_addr")
-   ports(1).req.writeData.suggestName("b_din")
-   ports(1).req.writeEn.suggestName("b_wr")
-   ports(1).rsp.readData.suggestName("b_dout")
  }
 
 
@@ -145,7 +134,6 @@ class DualPortBRAM_NoBlackBox(addrBits: Int, dataBits: Int)
   
   val ioInternal = Wire(new DualPortBRAMIO(addrBits, dataBits))
 
-
   io.a.connect(ioInternal.ports(0))
   io.b.connect(ioInternal.ports(1))
 
@@ -209,91 +197,3 @@ end
 
 endmodule
  */
-
- // A module for inferring true dual-pPort BRAMs on FPGAs
-
- // Since (Xilinx) FPGA synthesis tools do not infer TDP BRAMs from
- // Chisel-generated Verilog (both ports in the same "always" block),
- // we use a BlackBox with a premade Verilog BRAM template.
-//  class DualPortBRAMIO(addrBits: Int, dataBits: Int) extends Bundle {
-//    val ports = VecInit.fill (2) {
-//     new OCMSlaveIF(dataBits, dataBits, addrBits)
-//   }
-
-//    ports(0).req.addr.suggestName("a_addr")
-//    ports(0).req.writeData.suggestName("a_din")
-//    ports(0).req.writeEn.suggestName("a_wr")
-//    ports(0).rsp.readData.suggestName("a_dout")
-
-//    ports(1).req.addr.suggestName("b_addr")
-//    ports(1).req.writeData.suggestName("b_din")
-//    ports(1).req.writeEn.suggestName("b_wr")
-//    ports(1).rsp.readData.suggestName("b_dout")
-//  }
-
-//  // variant of DualPortBRAM with the desired number of registers at input and
-//  // output. should help achieve higher Fmax with large BRAMs, at the cost of
-//  // latency.
-//  class PipelinedDualPortBRAM(addrBits: Int, dataBits: Int,
-//    regIn: Int,   // number of registers at input
-//    regOut: Int   // number of registers at output
-//  ) extends Module {
-//    val io = IO(new DualPortBRAMIO(addrBits, dataBits))
-//    // instantiate the desired BRAM
-//    val bram = if(dataBits <= 36 && addrBits <= 4) {
-//      // use pure Chisel for small memories (just synth to LUTs)
-//      Module(new DualPortBRAM_NoBlackBox(addrBits, dataBits)).io
-//    } else {
-//      Module(new DualPortBRAM(addrBits, dataBits)).io
-//    }
-
-//    bram.ports(0).req := ShiftRegister(io.ports(0).req, regIn)
-//    bram.ports(1).req := ShiftRegister(io.ports(1).req, regIn)
-
-//    io.ports(0).rsp := ShiftRegister(bram.ports(0).rsp, regOut)
-//    io.ports(1).rsp := ShiftRegister(bram.ports(1).rsp, regOut)
-//  }
-
-//  class DualPortBRAM(addrBits: Int, dataBits: Int) extends BlackBox(Map("DATA" -> dataBits, "ADDR" -> addrBits)) {
-//    val io = new DualPortBRAMIO(addrBits, dataBits)
-
-//    // the clock does not get added to the BlackBox interface by default
-
-
-//    // simulation model for TDP BRAM
-//    // for the C++ backend, this generates a model that should be roughly
-//    // equivalent, although there's no guarantee about what happens on
-//    // collisions (sim access to same address with two memory ports)
-
-//    val mem = Mem(1 << addrBits, UInt(dataBits.W))
-
-//    for (i <- 0 until 2) {
-//      val req = io.ports(i).req
-//      val regAddr = RegNext(io.ports(i).req.addr)
-
-//      io.ports(i).rsp.readData := mem(regAddr)
-
-//      when (req.writeEn) {
-//        mem(req.addr) := req.writeData
-//      }
-//    }
-//  }
-
-//  // no BlackBox (pure Chisel) version. won't synthesize to BRAM, but sometimes
-//  // (if the depth is small) this may be more desirable.
-//  class DualPortBRAM_NoBlackBox(addrBits: Int, dataBits: Int) extends Module {
-//    val io = new DualPortBRAMIO(addrBits, dataBits)
-
-//    val mem = Mem(1 << addrBits, UInt(dataBits.W))
-
-//    for (i <- 0 until 2) {
-//      val req = io.ports(i).req
-//      val regAddr = RegNext(io.ports(i).req.addr)
-
-//      io.ports(i).rsp.readData := mem(regAddr)
-
-//      when (req.writeEn) {
-//        mem(req.addr) := req.writeData
-//      }
-//    }
-//  }

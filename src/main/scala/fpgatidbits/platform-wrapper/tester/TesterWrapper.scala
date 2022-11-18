@@ -337,27 +337,35 @@ class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {
   // TODO launch the default test, as defined by the accelerator
 }
 
-class VerilatedTesterWrapper(instFxn: PlatformWrapperParams => GenericAccelerator, targetDir: String)
-  extends TesterWrapper(instFxn, targetDir) {
+class VerilatedTesterWrapper(
+    instFxn: PlatformWrapperParams => GenericAccelerator,
+    targetDir: String
+) extends TesterWrapper(instFxn, targetDir) {
   override val platformDriverFiles = baseDriverFiles ++ Array[String](
-    "platform-verilatedtester.cpp", "verilatedtesterdriver.hpp"
+    "platform-verilatedtester.cpp",
+    "verilatedtesterdriver.hpp"
   )
 
   // Generate the RegFile driver
   generateRegDriver(targetDir)
 
-
-
   // Copy over the other needed files
   val verilogBlackBoxFiles = Seq("Q_srl.v", "DualPortBRAM.v")
   val scriptFiles = Seq("verilator-build.sh")
-  val driverFiles = Seq("wrapperregdriver.h", "platform-verilatedtester.cpp",
-    "platform.h", "verilatedtesterdriver.hpp")
+  val driverFiles = Seq(
+    "wrapperregdriver.h",
+    "platform-verilatedtester.cpp",
+    "platform.h",
+    "verilatedtesterdriver.hpp"
+  )
 
   val resRoot = Paths.get("./fpga-tidbits/src/main/resources").toAbsolutePath
   // copy blackbox verilog, scripts, driver and SW support files
   fileCopyBulk(s"$resRoot/verilog/", targetDir, verilogBlackBoxFiles)
   fileCopyBulk(s"$resRoot/script/", targetDir, scriptFiles)
-  fileCopyBulk(s"$resRoot/cpp/platform-wrapper-regdriver/", targetDir,
-    driverFiles)
+  fileCopyBulk(
+    s"$resRoot/cpp/platform-wrapper-regdriver/",
+    targetDir,
+    driverFiles
+  )
 }
