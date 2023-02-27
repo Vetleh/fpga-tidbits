@@ -80,13 +80,16 @@ class PipelinedDualPortBRAM(
 }
 
 class DualPortBRAM(addrBits: Int, dataBits: Int)
-    extends BlackBox(Map("DATA" -> dataBits, "ADDR" -> addrBits)) {
+    extends BlackBox(Map("DATA" -> dataBits, "ADDR" -> addrBits)) with HasBlackBoxResource {
 
   val io = IO(new Bundle {
     val a = (new DualPortBRAMExternalIO(addrBits, dataBits))
     val b = (new DualPortBRAMExternalIO(addrBits, dataBits))
     val clk = Input(Clock())
   })
+  // TODO master generalize path
+  addResource("/vhdl/DualPortBRAM.v")
+  
 
   // the clock does not get added to the BlackBox interface by default
 //  addClock(Driver.implicitClock)
