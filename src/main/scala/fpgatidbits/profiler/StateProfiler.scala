@@ -12,7 +12,7 @@ class StateProfiler(StateCount: Int) extends Module {
   })
 
   // create profiling registers for keeping state counts
-  val regStateCount = VecInit.fill(StateCount) { RegInit(0.U(32.W)) }
+  val regStateCount = RegInit(VecInit(Seq.fill(StateCount)(0.U(32.W))))
   // register input state before treatment
   val regInState = RegNext(io.probe, 0.U(32.W))
 
@@ -36,8 +36,7 @@ class StateProfiler(StateCount: Int) extends Module {
     }
 
     is(sRun) {
-      // TODOv2 RegNext may be a bad fix here
-      regStateCount(regInState) := RegNext(regStateCount(regInState)) + 1.U
+      regStateCount(regInState) := regStateCount(regInState) + 1.U
       // finish profiling when start goes low
       when(!io.start) {
         regState := sIdle

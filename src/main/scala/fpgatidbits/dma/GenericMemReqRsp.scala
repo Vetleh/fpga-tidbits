@@ -29,8 +29,8 @@ class MemReqParams(
 // a generic memory request structure, inspired by AXI with some diffs
 class GenericMemoryRequest(p: MemReqParams) extends PrintableBundle {
   // ID of the request channel (useful for out-of-order data returns)
-  // whether this request is a read (if false) or write (if true)
   val channelID = UInt(p.idWidth.W)
+  // whether this request is a read (if false) or write (if true)
   val isWrite = Bool()
   // start address of the request
   val addr = UInt(p.addrWidth.W)

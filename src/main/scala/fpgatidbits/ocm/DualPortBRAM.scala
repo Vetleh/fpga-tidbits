@@ -87,7 +87,7 @@ class DualPortBRAM(addrBits: Int, dataBits: Int)
     val b = (new DualPortBRAMExternalIO(addrBits, dataBits))
     val clk = Input(Clock())
   })
-  // TODO master generalize path
+  // TODO use relative path
   addResource("/vhdl/DualPortBRAM.v")
   
 
